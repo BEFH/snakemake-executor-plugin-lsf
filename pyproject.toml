@@ -1,11 +1,12 @@
 [tool.poetry]
-name = "snakemake-executor-plugin-slurm"
+name = "snakemake-executor-plugin-lsf"
 version = "0.1.1"
-description = "A Snakemake executor plugin for submitting jobs to a SLURM cluster."
+description = "A Snakemake executor plugin for submitting jobs to a LSF cluster."
 authors = [
     "David Lähnemann <david.laehnemann@dkfz-heidelberg.de>",
     "Johannes Koester <johannes.koester@uni-due.de>",
     "Christian Meesters <meesters@uni-mainz.de>",
+    "Brian Fulton-Howard <brian.fulton-howard@mssm.edu>"
 ]
 readme = "README.md"
 
