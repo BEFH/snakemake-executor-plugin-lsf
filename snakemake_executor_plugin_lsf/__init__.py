@@ -117,17 +117,23 @@ class Executor(RemoteExecutor):
 
         # if job.resources.get("constraint"):
         #    call += f" -C {job.resources.constraint}"
-        #TODO base this on the block size in self.lsf_config["LSF_UNIT_FOR_LIMITS"]
+
+        conv_fcts = {"K": 1024, "M": 1, "G": 1 / 1024, "T": 1 / (1024**2)}
+        mem_unit = self.lsf_config.get("LSF_UNIT_FOR_LIMITS", "MB")
+        conv_fct = conv_fcts[mem_unit[0]]
+        mem_perjob = self.lsf_config.get("LSB_JOB_MEMLIMIT", "n").lower()
         if job.resources.get("mem_mb_per_cpu"):
-            call += f" -R rusage[mem={job.resources.mem_mb_per_cpu}]"
+            mem_ = job.resources.mem_mb_per_cpu * conv_fct
         elif job.resources.get("mem_mb"):
-            mem_mb_per_cpu = job.resources.mem_mb / cpus_per_task
-            call += f" -R rusage[mem={mem_mb_per_cpu}]"
+            mem_ = job.resources.mem_mb * conv_fct / cpus_per_task
         else:
             self.logger.warning(
                 "No job memory information ('mem_mb' or 'mem_mb_per_cpu') is given "
                 "- submitting without. This might or might not work on your cluster."
             )
+        if mem_perjob == "y":
+                mem_ *= cpus_per_task
+        call += f" -R rusage[mem={mem_}]"
 
         # MPI job
         if job.resources.get("mpi", False):
@@ -470,9 +476,18 @@ class Executor(RemoteExecutor):
         lsb_params_file = f"{lsf_config['LSF_CONFDIR']}/lsbatch/{lsf_config['LSF_CLUSTER']}/configdir/lsb.params"
         with open(lsb_params_file, 'r') as file:
             for line in file:
-                if '=' in line:
+                if '=' in line and not line.strip().startswith("#"):
                     key, value = line.strip().split('=', 1)
                     if key.strip() == "DEFAULT_QUEUE":
                         lsf_config["DEFAULT_QUEUE"] = value.split("#")[0].strip()
                         break
+        lsf_conf_file = f"{lsf_config['LSF_CONFDIR']}/lsf.conf"
+        with open(lsf_conf_file, 'r') as file:
+            for line in file:
+                if '=' in line and not line.strip().startswith("#"):
+                    key, value = line.strip().split('=', 1)
+                    if key.strip() == "LSF_JOB_MEMLIMIT":
+                        lsf_config["LSF_JOB_MEMLIMIT"] = value.split("#")[0].strip()
+                        break
+    
         return lsf_config

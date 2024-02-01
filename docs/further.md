@@ -47,8 +47,6 @@ to specify them for every rule. Snakemake already has reasonable
 defaults built in, which are automatically activated when using any non-local executor
 (hence also with lsf). Use mem_mb_per_cpu to give the standard LSF type memory per CPU
 
-Currently, this executor plugin only works with MB limits on LSF and with memory per thread. We are changing that.
-
 ## MPI jobs {#cluster-slurm-mpi}
 
 Snakemake\'s LSF backend also supports MPI jobs, see
@@ -107,9 +105,9 @@ Please note: as `--mem` and `--mem-per-cpu` are mutually exclusive,
 their corresponding resource flags `mem`/`mem_mb` and
 `mem_mb_per_cpu` are mutually exclusive, too. You can only reserve
 memory a compute node has to provide or the memory required per CPU
-(SLURM does not make any distintion between real CPU cores and those
+(LSF does not make any distintion between real CPU cores and those
 provided by hyperthreads). The executor will convert the provided options
-based on cluster config. (not yet implemented)
+based on cluster config.
 
 ## Additional custom job configuration
 
