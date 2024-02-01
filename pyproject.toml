@@ -1,20 +1,24 @@
 [tool.poetry]
 name = "snakemake-executor-plugin-lsf"
-version = "0.1.1"
+version = "0.2.0"
 description = "A Snakemake executor plugin for submitting jobs to a LSF cluster."
 authors = [
+    "Brian Fulton-Howard <brian.fulton-howard@mssm.edu>",
+    "Christian Meesters <meesters@uni-mainz.de>",
     "David Lähnemann <david.laehnemann@dkfz-heidelberg.de>",
     "Johannes Koester <johannes.koester@uni-due.de>",
-    "Christian Meesters <meesters@uni-mainz.de>",
-    "Brian Fulton-Howard <brian.fulton-howard@mssm.edu>"
 ]
 readme = "README.md"
+license = "MIT"
+repository = "https://github.com/befh/snakemake-executor-plugin-lsf"
+documentation = "https://snakemake.github.io/snakemake-plugin-catalog/plugins/executor/lsf.html"
+keywords = ["snakemake", "plugin", "executor", "cluster", "lsf"]
 
 [tool.poetry.dependencies]
 python = "^3.11"
 snakemake-interface-common = "^1.13.0"
-snakemake-interface-executor-plugins = "^7.0.0"
-snakemake-executor-plugin-slurm-jobstep = "^0.1.5"
+snakemake-interface-executor-plugins = "^8.2.0"
+snakemake-executor-plugin-lsf-jobstep = "^0.1.10"
 throttler = "^1.2.2"
 
 [tool.poetry.group.dev.dependencies]

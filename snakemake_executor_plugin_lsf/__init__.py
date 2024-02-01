@@ -32,12 +32,14 @@ common_settings = CommonSettings(
     # filesystem (True) or not (False).
     # This is e.g. the case for cloud execution.
     implies_no_shared_fs=False,
+    job_deploy_sources=False,
     pass_default_storage_provider_args=True,
     pass_default_resources_args=True,
     pass_envvar_declarations_to_cmd=False,
     auto_deploy_default_storage_provider=False,
-    # wait a bit until lsf has job info available
-    init_seconds_before_status_checks=20,
+    # wait a bit until bjobs has job info available
+    init_seconds_before_status_checks=40,
+    pass_group_args=True,
 )
 
 
@@ -48,7 +50,7 @@ class Executor(RemoteExecutor):
         self.run_uuid = str(uuid.uuid4())
         self._fallback_project_arg = None
         self._fallback_queue = None
-        self.lsf_config = get_lsf_config()
+        self.lsf_config = self.get_lsf_config()
 
     def additional_general_args(self):
         # we need to set -j to 1 here, because the behaviour
@@ -57,7 +59,7 @@ class Executor(RemoteExecutor):
         # one after another, so we need to set -j to 1 for the
         # JobStep Executor, which in turn handles the launch of
         # LSF jobsteps.
-        return "--executor slurm-jobstep --jobs 1"
+        return "--executor lsf-jobstep --jobs 1"
 
     def run_job(self, job: JobExecutorInterface):
         # Implement here how to run a job.
@@ -67,8 +69,6 @@ class Executor(RemoteExecutor):
         # self.report_job_submission(job_info).
         # with job_info being of type
         # snakemake_interface_executor_plugins.executors.base.SubmittedJobInfo.
-
-        jobid = job.jobid
 
         log_folder = f"group_{job.name}" if job.is_group() else f"rule_{job.name}"
 
@@ -110,23 +110,30 @@ class Executor(RemoteExecutor):
                 )
             cpus_per_task = job.resources.cpus_per_task
         # ensure that at least 1 cpu is requested
-        # because 0 is not allowed by slurm
+        # because 0 is not allowed by LSF
+        ## TODO: check whether this is true for LSF
         cpus_per_task = max(1, cpus_per_task)
         call += f" -n {cpus_per_task}"
 
         # if job.resources.get("constraint"):
         #    call += f" -C {job.resources.constraint}"
-        #TODO base this on the block size in self.lsf_config["LSF_UNIT_FOR_LIMITS"]
+
+        conv_fcts = {"K": 1024, "M": 1, "G": 1 / 1024, "T": 1 / (1024**2)}
+        mem_unit = self.lsf_config.get("LSF_UNIT_FOR_LIMITS", "MB")
+        conv_fct = conv_fcts[mem_unit[0]]
+        mem_perjob = self.lsf_config.get("LSB_JOB_MEMLIMIT", "n").lower()
         if job.resources.get("mem_mb_per_cpu"):
-            call += f" -R rusage[mem={job.resources.mem_mb_per_cpu}]"
+            mem_ = job.resources.mem_mb_per_cpu * conv_fct
         elif job.resources.get("mem_mb"):
-            mem_mb_per_cpu = job.resources.mem_mb / cpus_per_task
-            call += f" -R rusage[mem={mem_mb_per_cpu}]"
+            mem_ = job.resources.mem_mb * conv_fct / cpus_per_task
         else:
             self.logger.warning(
                 "No job memory information ('mem_mb' or 'mem_mb_per_cpu') is given "
                 "- submitting without. This might or might not work on your cluster."
             )
+        if mem_perjob == "y":
+                mem_ *= cpus_per_task
+        call += f" -R rusage[mem={mem_}]"
 
         # MPI job
         if job.resources.get("mpi", False):
@@ -160,12 +167,12 @@ class Executor(RemoteExecutor):
         lsf_jobid = out.split(" ")[-1]
         lsf_logfile = lsf_logfile.replace("%j", lsf_jobid)
         self.logger.info(
-            f"Job {jobid} has been submitted with LSF jobid {slurm_jobid} "
+            f"Job {job.jobid} has been submitted with LSF jobid {lsf_jobid} "
             f"(log: {lsf_logfile})."
         )
         self.report_job_submission(
             SubmittedJobInfo(
-                job, external_jobid=slurm_jobid, aux={"lsf_logfile": lsf_logfile}
+                job, external_jobid=lsf_jobid, aux={"lsf_logfile": lsf_logfile}
             )
         )
 
@@ -192,12 +199,6 @@ class Executor(RemoteExecutor):
             "USUSP"
         )
         # Cap sleeping time between querying the status of all active jobs:
-        # If `AccountingStorageType`` for `sacct` is set to `accounting_storage/none`,
-        # sacct will query `slurmctld` (instead of `slurmdbd`) and this in turn can
-        # rely on default config, see: https://stackoverflow.com/a/46667605
-        # This config defaults to `MinJobAge=300`, which implies that jobs will be
-        # removed from `slurmctld` within 6 minutes of finishing. So we're conservative
-        # here, with half that time
         max_sleep_time = 180
 
         job_query_durations = []
@@ -242,11 +243,7 @@ class Executor(RemoteExecutor):
 
         any_finished = False
         for j in active_jobs:
-            # the job probably didn't make it into slurmdbd yet, so
-            # `sacct` doesn't return it
             if j.external_jobid not in status_of_jobs:
-                # but the job should still be queueing or running and
-                # appear in slurmdbd (and thus `sacct` output) later
                 yield j
                 continue
             status = status_of_jobs[j.external_jobid]
@@ -479,9 +476,18 @@ class Executor(RemoteExecutor):
         lsb_params_file = f"{lsf_config['LSF_CONFDIR']}/lsbatch/{lsf_config['LSF_CLUSTER']}/configdir/lsb.params"
         with open(lsb_params_file, 'r') as file:
             for line in file:
-                if '=' in line:
+                if '=' in line and not line.strip().startswith("#"):
                     key, value = line.strip().split('=', 1)
                     if key.strip() == "DEFAULT_QUEUE":
                         lsf_config["DEFAULT_QUEUE"] = value.split("#")[0].strip()
                         break
+        lsf_conf_file = f"{lsf_config['LSF_CONFDIR']}/lsf.conf"
+        with open(lsf_conf_file, 'r') as file:
+            for line in file:
+                if '=' in line and not line.strip().startswith("#"):
+                    key, value = line.strip().split('=', 1)
+                    if key.strip() == "LSF_JOB_MEMLIMIT":
+                        lsf_config["LSF_JOB_MEMLIMIT"] = value.split("#")[0].strip()
+                        break
+    
         return lsf_config

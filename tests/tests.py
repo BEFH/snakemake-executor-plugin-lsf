@@ -7,7 +7,7 @@ class TestWorkflowsBase(snakemake.common.tests.TestWorkflowsLocalStorageBase):
     __test__ = True
 
     def get_executor(self) -> str:
-        return "slurm"
+        return "lsf"
 
     def get_executor_settings(self) -> Optional[ExecutorSettingsBase]:
         return None

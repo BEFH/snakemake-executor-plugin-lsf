@@ -1,8 +1,3 @@
-# Snakemake executor plugin: LSF
-
-[LSF](https://www.ibm.com/docs/en/spectrum-lsf/) is common high performance
-computing batch system.
-
 ## Specifying Project and Queue
 
 LSF clusters can have mandatory resource indicators for
