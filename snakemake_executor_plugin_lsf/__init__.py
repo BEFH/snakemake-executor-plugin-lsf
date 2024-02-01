@@ -32,12 +32,14 @@ common_settings = CommonSettings(
     # filesystem (True) or not (False).
     # This is e.g. the case for cloud execution.
     implies_no_shared_fs=False,
+    job_deploy_sources=False,
     pass_default_storage_provider_args=True,
     pass_default_resources_args=True,
     pass_envvar_declarations_to_cmd=False,
     auto_deploy_default_storage_provider=False,
-    # wait a bit until lsf has job info available
-    init_seconds_before_status_checks=20,
+    # wait a bit until bjobs has job info available
+    init_seconds_before_status_checks=40,
+    pass_group_args=True,
 )
 
 
@@ -48,7 +50,7 @@ class Executor(RemoteExecutor):
         self.run_uuid = str(uuid.uuid4())
         self._fallback_project_arg = None
         self._fallback_queue = None
-        self.lsf_config = get_lsf_config()
+        self.lsf_config = self.get_lsf_config()
 
     def additional_general_args(self):
         # we need to set -j to 1 here, because the behaviour
@@ -57,7 +59,7 @@ class Executor(RemoteExecutor):
         # one after another, so we need to set -j to 1 for the
         # JobStep Executor, which in turn handles the launch of
         # LSF jobsteps.
-        return "--executor slurm-jobstep --jobs 1"
+        return "--executor lsf-jobstep --jobs 1"
 
     def run_job(self, job: JobExecutorInterface):
         # Implement here how to run a job.
@@ -67,8 +69,6 @@ class Executor(RemoteExecutor):
         # self.report_job_submission(job_info).
         # with job_info being of type
         # snakemake_interface_executor_plugins.executors.base.SubmittedJobInfo.
-
-        jobid = job.jobid
 
         log_folder = f"group_{job.name}" if job.is_group() else f"rule_{job.name}"
 
@@ -110,7 +110,8 @@ class Executor(RemoteExecutor):
                 )
             cpus_per_task = job.resources.cpus_per_task
         # ensure that at least 1 cpu is requested
-        # because 0 is not allowed by slurm
+        # because 0 is not allowed by LSF
+        ## TODO: check whether this is true for LSF
         cpus_per_task = max(1, cpus_per_task)
         call += f" -n {cpus_per_task}"
 
@@ -160,12 +161,12 @@ class Executor(RemoteExecutor):
         lsf_jobid = out.split(" ")[-1]
         lsf_logfile = lsf_logfile.replace("%j", lsf_jobid)
         self.logger.info(
-            f"Job {jobid} has been submitted with LSF jobid {slurm_jobid} "
+            f"Job {job.jobid} has been submitted with LSF jobid {lsf_jobid} "
             f"(log: {lsf_logfile})."
         )
         self.report_job_submission(
             SubmittedJobInfo(
-                job, external_jobid=slurm_jobid, aux={"lsf_logfile": lsf_logfile}
+                job, external_jobid=lsf_jobid, aux={"lsf_logfile": lsf_logfile}
             )
         )
 
@@ -192,12 +193,6 @@ class Executor(RemoteExecutor):
             "USUSP"
         )
         # Cap sleeping time between querying the status of all active jobs:
-        # If `AccountingStorageType`` for `sacct` is set to `accounting_storage/none`,
-        # sacct will query `slurmctld` (instead of `slurmdbd`) and this in turn can
-        # rely on default config, see: https://stackoverflow.com/a/46667605
-        # This config defaults to `MinJobAge=300`, which implies that jobs will be
-        # removed from `slurmctld` within 6 minutes of finishing. So we're conservative
-        # here, with half that time
         max_sleep_time = 180
 
         job_query_durations = []
@@ -242,11 +237,7 @@ class Executor(RemoteExecutor):
 
         any_finished = False
         for j in active_jobs:
-            # the job probably didn't make it into slurmdbd yet, so
-            # `sacct` doesn't return it
             if j.external_jobid not in status_of_jobs:
-                # but the job should still be queueing or running and
-                # appear in slurmdbd (and thus `sacct` output) later
                 yield j
                 continue
             status = status_of_jobs[j.external_jobid]
