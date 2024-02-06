@@ -214,7 +214,7 @@ class Executor(RemoteExecutor):
 
         job_query_durations = []
 
-        status_attempts = 5
+        status_attempts = 6
 
         active_jobs_ids = {job_info.external_jobid for job_info in active_jobs}
         active_jobs_seen = set()
@@ -223,7 +223,7 @@ class Executor(RemoteExecutor):
 
         for i in range(status_attempts):
             async with self.status_rate_limiter:
-                (status_of_jobs, job_query_duration) = await self.job_stati()
+                (status_of_jobs, job_query_duration) = await self.job_stati_bjobs()
                 job_query_durations.append(job_query_duration)
                 self.logger.debug(f"status_of_jobs after bjobs is: {status_of_jobs}")
                 # only take jobs that are still active
@@ -234,21 +234,42 @@ class Executor(RemoteExecutor):
                     active_jobs_seen
                     | active_jobs_ids_with_current_status
                 )
-                self.logger.debug(
-                    f"active_jobs_seen are: {active_jobs_seen}"
+                missing_status_ever = (
+                    active_jobs_ids
+                    - active_jobs_seen
                 )
+                if missing_status_ever and i > 2:
+                    (status_of_jobs_lsbevt, job_query_duration) = await self.job_stati_lsbevents()
+                    job_query_durations.append(job_query_duration)
+                    status_of_jobs.update(status_of_jobs_lsbevt)
+                    self.logger.debug(f"status_of_jobs after LSB_EVENTS is: {status_of_jobs}")
+                    active_jobs_ids_with_current_status = (
+                        set(status_of_jobs.keys()) & active_jobs_ids
+                    )
+                    active_jobs_seen = (
+                        active_jobs_seen
+                        | active_jobs_ids_with_current_status
+                    )
                 missing_status = (
                     active_jobs_seen
                     - active_jobs_ids_with_current_status
                 )
-                if not missing_status:
+                missing_status_ever = (
+                    active_jobs_ids
+                    - active_jobs_seen
+                )
+
+                self.logger.debug(
+                    f"active_jobs_seen are: {active_jobs_seen}"
+                )
+                if not missing_status and not missing_status_ever:
                     break
             if i >= status_attempts - 1:
                 self.logger.warning(
                     f"Unable to get the status of all active_jobs that should be "
                     f"in LSF, even after {status_attempts} attempts.\n"
-                    f"The jobs with the following  job ids were previously seen "
-                    "by bhist, but bhist doesn't report them any more:\n"
+                    f"The jobs with the following job ids were previously seen "
+                    "but are no longer reported by bjobs or in LSB_EVENTS:\n"
                     f"{missing_status}\n"
                     f"Please double-check with your LSF cluster administrator, that "
                     "job accounting is properly set up.\n"
@@ -308,9 +329,42 @@ class Executor(RemoteExecutor):
             except subprocess.TimeoutExpired:
                 self.logger.warning("Unable to cancel jobs within a minute.")
 
-    async def job_stati(self):
+    async def job_stati_bjobs(self):
         """
-        Obtain LSF job status of all submitted jobs
+        Obtain LSF job status of all submitted jobs from bjobs
+        """
+        uuid = self.run_uuid
+
+        statuses_all = []
+
+        try:
+            running_cmd = f"bjobs -noheader -o 'jobid stat' -aJ '*{uuid}*'"
+            time_before_query = time.time()
+            running = subprocess.check_output(
+                running_cmd, shell=True, text=True, stderr=subprocess.PIPE)
+            query_duration = time.time() - time_before_query
+            self.logger.debug(
+                f"The job status for running jobs was queried with command: {running_cmd}\n"
+                f"It took: {query_duration} seconds\n"
+                f"The output is:\n'{running}'\n"
+            )
+            if running:
+                statuses_all += [tuple(x.split()) for x in running.strip().split('\n')]
+        except subprocess.CalledProcessError as e:
+            self.logger.error(
+                f"The running job status query failed with command: {running_cmd}\n"
+                f"Error message: {e.stderr.strip()}\n"
+            )
+            pass
+        
+        res = {x[0]: x[1] for x in statuses_all}
+
+        return (res, query_duration)
+
+
+    async def job_stati_lsbevents(self):
+        """
+        Obtain LSF job status of all submitted jobs from LSB_EVENTS
         """
         uuid = self.run_uuid
 
@@ -367,26 +421,6 @@ class Executor(RemoteExecutor):
             )
             pass
 
-        try:
-            running_cmd = f"bjobs -noheader -o 'jobid stat' -J '*{uuid}*'"
-            time_before_query = time.time()
-            running = subprocess.check_output(
-                running_cmd, shell=True, text=True, stderr=subprocess.PIPE)
-            query_duration = time.time() - time_before_query
-            self.logger.debug(
-                f"The job status for running jobs was queried with command: {running_cmd}\n"
-                f"It took: {query_duration} seconds\n"
-                f"The output is:\n'{running}'\n"
-            )
-            if running:
-                statuses_all += [tuple(x.split()) for x in running.strip().split('\n')]
-        except subprocess.CalledProcessError as e:
-            self.logger.error(
-                f"The running job status query failed with command: {running_cmd}\n"
-                f"Error message: {e.stderr.strip()}\n"
-            )
-            pass
-        
         res = {x[0]: x[1] for x in statuses_all}
 
         return (res, query_duration)
