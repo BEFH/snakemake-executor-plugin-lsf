@@ -6,9 +6,11 @@ __license__ = "MIT"
 import csv
 from io import StringIO
 import os
+import re
 import subprocess
 import time
 from typing import List, Generator
+from collections import Counter
 import uuid
 from snakemake_interface_executor_plugins.executors.base import SubmittedJobInfo
 from snakemake_interface_executor_plugins.executors.remote import RemoteExecutor
@@ -38,7 +40,7 @@ common_settings = CommonSettings(
     pass_envvar_declarations_to_cmd=False,
     auto_deploy_default_storage_provider=False,
     # wait a bit until bjobs has job info available
-    init_seconds_before_status_checks=40,
+    init_seconds_before_status_checks=20,
     pass_group_args=True,
 )
 
@@ -72,14 +74,24 @@ class Executor(RemoteExecutor):
 
         log_folder = f"group_{job.name}" if job.is_group() else f"rule_{job.name}"
 
-        lsf_logfile = os.path.abspath(f".snakemake/lsf_logs/{log_folder}/%j.log")
+        wildcard_dict = job.wildcards_dict
+        if wildcard_dict:
+            wildcard_dict_noslash = {k: v.replace('/', '___') for k, v in wildcard_dict.items()}
+            wildcard_str = "..".join([f'{k}={v}' for k, v in wildcard_dict_noslash.items()])
+            wildcard_str_job = ",".join([f'{k}={v}' for k, v in wildcard_dict_noslash.items()])
+            jobname = f"Snakemake_{log_folder}:{wildcard_str_job}___({self.run_uuid})"
+        else:
+            jobname = f"Snakemake_{log_folder}___({self.run_uuid})"
+            wildcard_str = "unique"
+
+        lsf_logfile = os.path.abspath(f".snakemake/lsf_logs/{log_folder}/{wildcard_str}/{self.run_uuid}.log")
 
         os.makedirs(os.path.dirname(lsf_logfile), exist_ok=True)
 
         # generic part of a submission string:
-        # we use a run_uuid as the job-name, to allow `--name`-based
+        # we use a run_uuid in the job-name, to allow `--name`-based
         # filtering in the job status checks
-        call = f"bsub -J {self.run_uuid} -o {lsf_logfile} -e {lsf_logfile} -env all"
+        call = f"bsub -J '{jobname}' -o {lsf_logfile} -e {lsf_logfile} -env all"
 
         call += self.get_project_arg(job)
         call += self.get_queue_arg(job)
@@ -163,9 +175,8 @@ class Executor(RemoteExecutor):
             raise WorkflowError(
                 f"LSF job submission failed. The error message was {e.output}"
             )
-
-        lsf_jobid = out.split(" ")[-1]
-        lsf_logfile = lsf_logfile.replace("%j", lsf_jobid)
+        lsf_jobid = out.split(" ")[1][1:-1]
+        lsf_logfile = lsf_logfile.replace("%J", lsf_jobid)
         self.logger.info(
             f"Job {job.jobid} has been submitted with LSF jobid {lsf_jobid} "
             f"(log: {lsf_logfile})."
@@ -207,6 +218,8 @@ class Executor(RemoteExecutor):
 
         active_jobs_ids = {job_info.external_jobid for job_info in active_jobs}
         active_jobs_seen = set()
+
+        self.logger.debug("Checking job status")
 
         for i in range(status_attempts):
             async with self.status_rate_limiter:
@@ -250,20 +263,20 @@ class Executor(RemoteExecutor):
             if status == "DONE":
                 self.report_job_success(j)
                 any_finished = True
-                active_jobs_seen_by_bhist.remove(j.external_jobid)
+                active_jobs_seen.remove(j.external_jobid)
             elif status == "UNKWN":
                 # the job probably does not exist anymore, but 'sacct' did not work
                 # so we assume it is finished
                 self.report_job_success(j)
                 any_finished = True
-                active_jobs_seen_by_bhist.remove(j.external_jobid)
+                active_jobs_seen.remove(j.external_jobid)
             elif status in fail_stati:
                 msg = (
                     f"LSF-job '{j.external_jobid}' failed, LSF status is: "
                     f"'{status}'"
                 )
                 self.report_job_error(j, msg=msg, aux_logs=[j.aux["lsf_logfile"]])
-                active_jobs_seen_by_bhist.remove(j.external_jobid)
+                active_jobs_seen.remove(j.external_jobid)
             else:  # still running?
                 yield j
 
@@ -491,3 +504,76 @@ class Executor(RemoteExecutor):
                         break
     
         return lsf_config
+
+def walltime_lsf_to_generic(w):
+    """
+    convert old LSF walltime format to new generic format
+    """
+    s = 0
+    if type(w) in [int, float]:
+        # convert int minutes to hours minutes and seconds
+        return w
+    elif type(w) == str:
+        if re.match(r"^\d+(ms|[smhdw])$", w):
+            return w
+        elif re.match(r"^\d+:\d+$", w):
+            # convert "HH:MM" to hours minutes and seconds
+            h, m = map(float, w.split(":"))
+        elif re.match(r"^\d+:\d+:\d+$", w):
+            # convert "HH:MM:SS" to hours minutes and seconds
+            h, m, s = map(float, w.split(":"))
+        elif re.match(r"^\d+:\d+\.\d+$", w):
+            # convert "HH:MM.XX" to hours minutes and seconds
+            h, m = map(float, w.split(":"))
+            s = (m % 1) * 60
+            m = round(m)
+        elif re.match(r"^\d+\.\d+$", w):
+            return float(w)
+        elif re.match(r"^\d+$", w):
+            return int(w)
+        else:
+            raise ValueError(f"Invalid walltime format: {w}")
+    h = int(h)
+    m = int(m)
+    s = int(s)
+    return (h * 60) + m + (s / 60)
+
+def generalize_lsf(rules, runtime=True, memory='perthread_to_perjob'):
+    """
+    Convert LSF specific resources to generic resources
+    """
+    re_mem = re.compile(r'^([0-9.]+)(B|KB|MB|GB|TB|PB|KiB|MiB|GiB|TiB|PiB)$')
+    for k in rules._rules.keys():
+        res_ = rules._rules[k].rule.resources
+        if runtime:
+            if "walltime" in res_.keys():
+                runtime_ = walltime_lsf_to_generic(res_['walltime'])
+                del rules._rules[k].rule.resources['walltime']    
+            elif "time_min" in res_.keys():
+                runtime_ = walltime_lsf_to_generic(res_['time_min'])
+                del rules._rules[k].rule.resources['time_min']
+            elif "runtime" in res_.keys():
+                runtime_ = walltime_lsf_to_generic(res_['runtime'])
+            rules._rules[k].rule.resources['runtime'] = runtime_
+        if memory == 'perthread_to_perjob':
+            if "mem_mb" in res_.keys():
+                mem_ = float(res_['mem_mb']) * res_['_cores']
+                if mem_ % 1 == 0:
+                    rules._rules[k].rule.resources['mem_mb'] = int(mem_)
+                else:
+                    rules._rules[k].rule.resources['mem_mb'] = mem_
+            elif "mem" in res_.keys():
+                mem_ = re_mem.match(res_['mem'])
+                if mem_:
+                    mem = float(mem_[1]) * res_['_cores']
+                else:
+                    raise ValueError(f"Invalid memory format: {res_['mem']} in rule {k}")
+                if mem % 1 == 0:
+                    mem = int(mem)
+                rules._rules[k].rule.resources['mem'] = f'{mem}{mem_[2]}'
+        elif memory == 'rename_mem_mb_per_cpu':
+            if "mem_mb" in res_.keys():
+                rules._rules[k].rule.resources['mem_mb_per_cpu'] = res_['mem_mb']
+                del rules._rules[k].rule.resources['mem_mb']
+            elif "mem" in res_.keys():
+                raise ValueError(f"Cannot rename resource from 'mem' to 'mem_mb_per_cpu' in rule {k}")
