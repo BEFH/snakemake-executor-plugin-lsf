@@ -76,15 +76,23 @@ class Executor(RemoteExecutor):
 
         wildcard_dict = job.wildcards_dict
         if wildcard_dict:
-            wildcard_dict_noslash = {k: v.replace('/', '___') for k, v in wildcard_dict.items()}
-            wildcard_str = "..".join([f'{k}={v}' for k, v in wildcard_dict_noslash.items()])
-            wildcard_str_job = ",".join([f'{k}={v}' for k, v in wildcard_dict_noslash.items()])
+            wildcard_dict_noslash = {
+                k: v.replace("/", "___") for k, v in wildcard_dict.items()
+            }
+            wildcard_str = "..".join(
+                [f"{k}={v}" for k, v in wildcard_dict_noslash.items()]
+            )
+            wildcard_str_job = ",".join(
+                [f"{k}={v}" for k, v in wildcard_dict_noslash.items()]
+            )
             jobname = f"Snakemake_{log_folder}:{wildcard_str_job}___({self.run_uuid})"
         else:
             jobname = f"Snakemake_{log_folder}___({self.run_uuid})"
             wildcard_str = "unique"
 
-        lsf_logfile = os.path.abspath(f".snakemake/lsf_logs/{log_folder}/{wildcard_str}/{self.run_uuid}.log")
+        lsf_logfile = os.path.abspath(
+            f".snakemake/lsf_logs/{log_folder}/{wildcard_str}/{self.run_uuid}.log"
+        )
 
         os.makedirs(os.path.dirname(lsf_logfile), exist_ok=True)
 
@@ -144,7 +152,7 @@ class Executor(RemoteExecutor):
                 "- submitting without. This might or might not work on your cluster."
             )
         if mem_perjob == "y":
-                mem_ *= cpus_per_task
+            mem_ *= cpus_per_task
         call += f" -R rusage[mem={mem_}]"
 
         # MPI job
@@ -153,7 +161,6 @@ class Executor(RemoteExecutor):
                 call += f" -R span[ptile={job.resources.get('ptile', 1)}]"
         else:
             call += f" -R span[hosts=1]"
-
 
         if job.resources.get("lsf_extra"):
             call += f" {job.resources.lsf_extra}"
@@ -204,11 +211,7 @@ class Executor(RemoteExecutor):
         #
         # async with self.status_rate_limiter:
         #    # query remote middleware here
-        fail_stati = (
-            "SSUSP",
-            "EXIT",
-            "USUSP"
-        )
+        fail_stati = ("SSUSP", "EXIT", "USUSP")
         # Cap sleeping time between querying the status of all active jobs:
         max_sleep_time = 180
 
@@ -231,37 +234,29 @@ class Executor(RemoteExecutor):
                     set(status_of_jobs.keys()) & active_jobs_ids
                 )
                 active_jobs_seen = (
-                    active_jobs_seen
-                    | active_jobs_ids_with_current_status
+                    active_jobs_seen | active_jobs_ids_with_current_status
                 )
-                missing_status_ever = (
-                    active_jobs_ids
-                    - active_jobs_seen
-                )
+                missing_status_ever = active_jobs_ids - active_jobs_seen
                 if missing_status_ever and i > 2:
-                    (status_of_jobs_lsbevt, job_query_duration) = await self.job_stati_lsbevents()
+                    (
+                        status_of_jobs_lsbevt,
+                        job_query_duration,
+                    ) = await self.job_stati_lsbevents()
                     job_query_durations.append(job_query_duration)
                     status_of_jobs.update(status_of_jobs_lsbevt)
-                    self.logger.debug(f"status_of_jobs after LSB_EVENTS is: {status_of_jobs}")
+                    self.logger.debug(
+                        f"status_of_jobs after LSB_EVENTS is: {status_of_jobs}"
+                    )
                     active_jobs_ids_with_current_status = (
                         set(status_of_jobs.keys()) & active_jobs_ids
                     )
                     active_jobs_seen = (
-                        active_jobs_seen
-                        | active_jobs_ids_with_current_status
+                        active_jobs_seen | active_jobs_ids_with_current_status
                     )
-                missing_status = (
-                    active_jobs_seen
-                    - active_jobs_ids_with_current_status
-                )
-                missing_status_ever = (
-                    active_jobs_ids
-                    - active_jobs_seen
-                )
+                missing_status = active_jobs_seen - active_jobs_ids_with_current_status
+                missing_status_ever = active_jobs_ids - active_jobs_seen
 
-                self.logger.debug(
-                    f"active_jobs_seen are: {active_jobs_seen}"
-                )
+                self.logger.debug(f"active_jobs_seen are: {active_jobs_seen}")
                 if not missing_status and not missing_status_ever:
                     break
             if i >= status_attempts - 1:
@@ -341,7 +336,8 @@ class Executor(RemoteExecutor):
             running_cmd = f"bjobs -noheader -o 'jobid stat' -aJ '*{uuid}*'"
             time_before_query = time.time()
             running = subprocess.check_output(
-                running_cmd, shell=True, text=True, stderr=subprocess.PIPE)
+                running_cmd, shell=True, text=True, stderr=subprocess.PIPE
+            )
             query_duration = time.time() - time_before_query
             self.logger.debug(
                 f"The job status for running jobs was queried with command: {running_cmd}\n"
@@ -349,18 +345,17 @@ class Executor(RemoteExecutor):
                 f"The output is:\n'{running}'\n"
             )
             if running:
-                statuses_all += [tuple(x.split()) for x in running.strip().split('\n')]
+                statuses_all += [tuple(x.split()) for x in running.strip().split("\n")]
         except subprocess.CalledProcessError as e:
             self.logger.error(
                 f"The running job status query failed with command: {running_cmd}\n"
                 f"Error message: {e.stderr.strip()}\n"
             )
             pass
-        
+
         res = {x[0]: x[1] for x in statuses_all}
 
         return (res, query_duration)
-
 
     async def job_stati_lsbevents(self):
         """
@@ -369,22 +364,22 @@ class Executor(RemoteExecutor):
         uuid = self.run_uuid
 
         statuses = {
-            "0": 'NULL',  # State null
-            "1": 'PEND',  # The job is pending, i.e., it has not been dispatched yet.
-            "2": 'PSUSP',  # The pending job was suspended by its owner or the LSF system administrator.
-            "4": 'RUN',  # The job is running.
-            "8": 'SSUSP',  # The running job was suspended by the system because an execution host was overloaded or the queue run window closed.
-            "16": 'USUSP',  # The running job was suspended by its owner or the LSF system administrator.
-            "32": 'EXIT',  # The job has terminated with a non-zero status - it may have been aborted due to an error in its execution or killed by its owner or by the LSF system administrator.
-            "64": 'DONE',  # The job has terminated with status 0.
-            "128": 'PDONE',  # Post job process done successfully.
-            "256": 'PERR',  # Post job process has an error.
-            "512": 'WAIT',  # Chunk job waiting its turn to exec.
-            "32768": 'RUNKWN',  # Flag: Job status is UNKWN caused by losing contact with a remote cluster.
-            "65536": 'UNKWN',  # The server batch daemon (sbatchd) on the host on which the job is processed has lost contact with the master batch daemon (mbatchd).
-            "131072": 'PROV'  # This state shows that the job is dispatched to a standby power saved host, and this host is being waken up or started up.
+            "0": "NULL",  # State null
+            "1": "PEND",  # The job is pending, i.e., it has not been dispatched yet.
+            "2": "PSUSP",  # The pending job was suspended by its owner or the LSF system administrator.
+            "4": "RUN",  # The job is running.
+            "8": "SSUSP",  # The running job was suspended by the system because an execution host was overloaded or the queue run window closed.
+            "16": "USUSP",  # The running job was suspended by its owner or the LSF system administrator.
+            "32": "EXIT",  # The job has terminated with a non-zero status - it may have been aborted due to an error in its execution or killed by its owner or by the LSF system administrator.
+            "64": "DONE",  # The job has terminated with status 0.
+            "128": "PDONE",  # Post job process done successfully.
+            "256": "PERR",  # Post job process has an error.
+            "512": "WAIT",  # Chunk job waiting its turn to exec.
+            "32768": "RUNKWN",  # Flag: Job status is UNKWN caused by losing contact with a remote cluster.
+            "65536": "UNKWN",  # The server batch daemon (sbatchd) on the host on which the job is processed has lost contact with the master batch daemon (mbatchd).
+            "131072": "PROV",  # This state shows that the job is dispatched to a standby power saved host, and this host is being waken up or started up.
         }
-        awk_code = f'''
+        awk_code = f"""
         awk '
             BEGIN {{
                 FPAT = "([^ ]+)|(\\"[^\\"]+\\")"
@@ -397,14 +392,15 @@ class Executor(RemoteExecutor):
                 print $4, $5
             }}
         ' {self.lsf_config['LSB_EVENTS']}
-        '''
+        """
 
         statuses_all = []
 
         try:
             time_before_query = time.time()
             finished = subprocess.check_output(
-                awk_code, shell=True, text=True, stderr=subprocess.PIPE)
+                awk_code, shell=True, text=True, stderr=subprocess.PIPE
+            )
             query_duration = time.time() - time_before_query
             self.logger.debug(
                 f"The job status for completed jobs was queried.\n"
@@ -412,7 +408,7 @@ class Executor(RemoteExecutor):
                 f"The output is:\n'{finished}'\n"
             )
             if finished:
-                codes = [tuple(x.split()) for x in finished.strip().split('\n')]
+                codes = [tuple(x.split()) for x in finished.strip().split("\n")]
                 statuses_all += [(x, statuses[y]) for x, y in codes]
         except subprocess.CalledProcessError as e:
             self.logger.error(
@@ -448,9 +444,7 @@ class Executor(RemoteExecutor):
                     self.logger.warning(
                         "Unable to guess LSF project. Trying to proceed without."
                     )
-                    self._fallback_project_arg = (
-                        ""  # no project specific args for bsub
-                    )
+                    self._fallback_project_arg = ""  # no project specific args for bsub
             return self._fallback_project_arg
 
     def get_queue_arg(self, job: JobExecutorInterface):
@@ -480,7 +474,7 @@ class Executor(RemoteExecutor):
             bhist_out = subprocess.check_output(
                 cmd, shell=True, text=True, stderr=subprocess.PIPE
             )
-            projects = re.findall(r'Project <([^<>]+)>', bhist_out)
+            projects = re.findall(r"Project <([^<>]+)>", bhist_out)
             counter = Counter(projects)
             return counter.most_common(1)[0][0]
         except subprocess.CalledProcessError as e:
@@ -508,36 +502,40 @@ class Executor(RemoteExecutor):
 
     @staticmethod
     def get_lsf_config():
-        lsf_config_raw = subprocess.run(f"badmin showconf mbd",
-                                        shell=True, capture_output=True,
-                                        text=True)
-        
+        lsf_config_raw = subprocess.run(
+            f"badmin showconf mbd", shell=True, capture_output=True, text=True
+        )
+
         lsf_config_lines = lsf_config_raw.stdout.strip().split("\n")
         lsf_config_tuples = [tuple(x.strip().split(" = ")) for x in lsf_config_lines]
         lsf_config = {x[0]: x[1] for x in lsf_config_tuples[1:]}
-        clusters = subprocess.run("lsclusters", shell=True,
-                                  capture_output=True, text=True)
-        lsf_config['LSF_CLUSTER'] = clusters.stdout.split("\n")[1].split()[0]
-        lsf_config['LSB_EVENTS'] = (f"{lsf_config['LSB_SHAREDIR']}/{lsf_config['LSF_CLUSTER']}" +
-                                    "/logdir/lsb.events")
+        clusters = subprocess.run(
+            "lsclusters", shell=True, capture_output=True, text=True
+        )
+        lsf_config["LSF_CLUSTER"] = clusters.stdout.split("\n")[1].split()[0]
+        lsf_config["LSB_EVENTS"] = (
+            f"{lsf_config['LSB_SHAREDIR']}/{lsf_config['LSF_CLUSTER']}"
+            + "/logdir/lsb.events"
+        )
         lsb_params_file = f"{lsf_config['LSF_CONFDIR']}/lsbatch/{lsf_config['LSF_CLUSTER']}/configdir/lsb.params"
-        with open(lsb_params_file, 'r') as file:
+        with open(lsb_params_file, "r") as file:
             for line in file:
-                if '=' in line and not line.strip().startswith("#"):
-                    key, value = line.strip().split('=', 1)
+                if "=" in line and not line.strip().startswith("#"):
+                    key, value = line.strip().split("=", 1)
                     if key.strip() == "DEFAULT_QUEUE":
                         lsf_config["DEFAULT_QUEUE"] = value.split("#")[0].strip()
                         break
         lsf_conf_file = f"{lsf_config['LSF_CONFDIR']}/lsf.conf"
-        with open(lsf_conf_file, 'r') as file:
+        with open(lsf_conf_file, "r") as file:
             for line in file:
-                if '=' in line and not line.strip().startswith("#"):
-                    key, value = line.strip().split('=', 1)
+                if "=" in line and not line.strip().startswith("#"):
+                    key, value = line.strip().split("=", 1)
                     if key.strip() == "LSF_JOB_MEMLIMIT":
                         lsf_config["LSF_JOB_MEMLIMIT"] = value.split("#")[0].strip()
                         break
-    
+
         return lsf_config
+
 
 def walltime_lsf_to_generic(w):
     """
@@ -572,42 +570,47 @@ def walltime_lsf_to_generic(w):
     s = int(s)
     return (h * 60) + m + (s / 60)
 
-def generalize_lsf(rules, runtime=True, memory='perthread_to_perjob'):
+
+def generalize_lsf(rules, runtime=True, memory="perthread_to_perjob"):
     """
     Convert LSF specific resources to generic resources
     """
-    re_mem = re.compile(r'^([0-9.]+)(B|KB|MB|GB|TB|PB|KiB|MiB|GiB|TiB|PiB)$')
+    re_mem = re.compile(r"^([0-9.]+)(B|KB|MB|GB|TB|PB|KiB|MiB|GiB|TiB|PiB)$")
     for k in rules._rules.keys():
         res_ = rules._rules[k].rule.resources
         if runtime:
             if "walltime" in res_.keys():
-                runtime_ = walltime_lsf_to_generic(res_['walltime'])
-                del rules._rules[k].rule.resources['walltime']    
+                runtime_ = walltime_lsf_to_generic(res_["walltime"])
+                del rules._rules[k].rule.resources["walltime"]
             elif "time_min" in res_.keys():
-                runtime_ = walltime_lsf_to_generic(res_['time_min'])
-                del rules._rules[k].rule.resources['time_min']
+                runtime_ = walltime_lsf_to_generic(res_["time_min"])
+                del rules._rules[k].rule.resources["time_min"]
             elif "runtime" in res_.keys():
-                runtime_ = walltime_lsf_to_generic(res_['runtime'])
-            rules._rules[k].rule.resources['runtime'] = runtime_
-        if memory == 'perthread_to_perjob':
+                runtime_ = walltime_lsf_to_generic(res_["runtime"])
+            rules._rules[k].rule.resources["runtime"] = runtime_
+        if memory == "perthread_to_perjob":
             if "mem_mb" in res_.keys():
-                mem_ = float(res_['mem_mb']) * res_['_cores']
+                mem_ = float(res_["mem_mb"]) * res_["_cores"]
                 if mem_ % 1 == 0:
-                    rules._rules[k].rule.resources['mem_mb'] = int(mem_)
+                    rules._rules[k].rule.resources["mem_mb"] = int(mem_)
                 else:
-                    rules._rules[k].rule.resources['mem_mb'] = mem_
+                    rules._rules[k].rule.resources["mem_mb"] = mem_
             elif "mem" in res_.keys():
-                mem_ = re_mem.match(res_['mem'])
+                mem_ = re_mem.match(res_["mem"])
                 if mem_:
-                    mem = float(mem_[1]) * res_['_cores']
+                    mem = float(mem_[1]) * res_["_cores"]
                 else:
-                    raise ValueError(f"Invalid memory format: {res_['mem']} in rule {k}")
+                    raise ValueError(
+                        f"Invalid memory format: {res_['mem']} in rule {k}"
+                    )
                 if mem % 1 == 0:
                     mem = int(mem)
-                rules._rules[k].rule.resources['mem'] = f'{mem}{mem_[2]}'
-        elif memory == 'rename_mem_mb_per_cpu':
+                rules._rules[k].rule.resources["mem"] = f"{mem}{mem_[2]}"
+        elif memory == "rename_mem_mb_per_cpu":
             if "mem_mb" in res_.keys():
-                rules._rules[k].rule.resources['mem_mb_per_cpu'] = res_['mem_mb']
-                del rules._rules[k].rule.resources['mem_mb']
+                rules._rules[k].rule.resources["mem_mb_per_cpu"] = res_["mem_mb"]
+                del rules._rules[k].rule.resources["mem_mb"]
             elif "mem" in res_.keys():
-                raise ValueError(f"Cannot rename resource from 'mem' to 'mem_mb_per_cpu' in rule {k}")
+                raise ValueError(
+                    f"Cannot rename resource from 'mem' to 'mem_mb_per_cpu' in rule {k}"
+                )
