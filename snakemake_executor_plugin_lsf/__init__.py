@@ -1,5 +1,10 @@
-__author__ = "David Lähnemann, Johannes Köster, Christian Meesters, Brian Fulton-Howard"
-__copyright__ = "Copyright 2023, David Lähnemann, Johannes Köster, Christian Meesters, Brian Fulton-Howard"
+__author__ = "Brian Fulton-Howard, David Lähnemann, Johannes Köster, Christian Meesters"
+__copyright__ = (
+    "Copyright 2023, Brian Fulton-Howard, ",
+    "David Lähnemann, ",
+    "Johannes Köster, ",
+    "Christian Meesters",
+)
 __email__ = "johannes.koester@uni-due.de"
 __license__ = "MIT"
 
