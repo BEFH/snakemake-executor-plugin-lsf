@@ -1,0 +1,38 @@
+name: publish_package
+
+on:
+  release:
+    types: [published]
+    tags:
+      - '**'
+
+jobs:
+  anaconda_publish:
+    name: Publish package to anaconda
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Publish Anaconda package to Anaconda.org
+      uses: BEFH/anaconda-publish@v2.0
+      with:
+        subDir: 'conda'
+        channels: '-c conda-forge -c bfh'
+        AnacondaToken: ${{ secrets.ANACONDA_TOKEN }}
+        publish: true
+        test_all: true
+        convert_win: false
+        convert_osx: true
+  deploy_pypi:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install wheel poetry
+    - name: Build and publish
+      run: |
+        poetry build
+        poetry config pypi-token.pypi ${{ secrets.PYPI_TOKEN }}
+        poetry publish

@@ -1,0 +1,50 @@
+{% set pyproject = load_file_data(os.getcwd() + '/pyproject.toml', 'toml') %}
+{% set poetry = pyproject.get('tool', {}).get('poetry') %}
+{% set deps = poetry['dependencies'] %}
+{% if deps.get('python').startswith('^') %}
+    {% set pyver = '>=' + deps['python'][1:] %}
+{% else %}
+    {% set pyver = '==' + deps['python'] %}
+{% endif %}
+package:
+  name: snakemake-executor-plugin-lsf
+  version: {{ poetry['version'] }}
+
+source:
+  path: ..
+
+requirements:
+  host:
+    - python {{ pyver }}
+    - poetry
+
+  build:
+    - python {{ pyver }}
+    - pip
+    - poetry
+
+  run: {% for dep in deps %}
+    - {{ dep }} {% if deps[dep].startswith('^') %}>={{ deps[dep][1:] }}{% else %}=={{ deps[dep] }}{% endif %}{% endfor %}
+
+build:
+  number: 0
+  script: "{{ PYTHON }} -m pip install --no-deps --ignore-installed ."
+
+test:
+  imports:
+    -  {{ poetry.get('name') }}
+
+about:
+  home: {{ poetry.get('repository') }}
+  license: MIT
+  license_family: MIT
+  license_file: LICENSE
+  summary: {{ poetry.get('description') }}
+  description: |
+    LSF is common high performance computing batch system.
+    This executor plugin allows to use it in a seamless and straightforward way.
+  doc_url: https://github.com/BEFH/snakemake-executor-plugin-lsf/blob/main/docs/further.md
+
+extra:
+  recipe-maintainers:
+    - BEFH
