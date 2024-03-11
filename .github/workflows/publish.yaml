@@ -15,7 +15,6 @@ jobs:
     - name: Publish Anaconda package to Anaconda.org
       uses: BEFH/anaconda-publish@v2.0
       with:
-        subDir: 'conda'
         channels: '-c conda-forge -c bfh'
         AnacondaToken: ${{ secrets.ANACONDA_TOKEN }}
         publish: true
