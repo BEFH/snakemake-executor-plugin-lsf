@@ -1,4 +1,6 @@
-{% set pyproject = load_file_data(os.getcwd() + '/pyproject.toml', 'toml') %}
+{% set cwd = os.getcwd() %}
+{% set workdir = os.path.dirname(cwd) if os.path.basename(cwd) == "conda" else cwd %}
+{% set pyproject = load_file_data(workdir + '/pyproject.toml', 'toml') %}
 {% set poetry = pyproject.get('tool', {}).get('poetry') %}
 {% set deps = poetry['dependencies'] %}
 {% if deps.get('python').startswith('^') %}
@@ -27,12 +29,13 @@ requirements:
     - {{ dep }} {% if deps[dep].startswith('^') %}>={{ deps[dep][1:] }}{% else %}=={{ deps[dep] }}{% endif %}{% endfor %}
 
 build:
+  noarch: python
   number: 0
   script: "{{ PYTHON }} -m pip install --no-deps --ignore-installed ."
 
 test:
   imports:
-    -  {{ poetry.get('name') }}
+    -  {{ poetry.get('name').replace("-", "_") }}
 
 about:
   home: {{ poetry.get('repository') }}

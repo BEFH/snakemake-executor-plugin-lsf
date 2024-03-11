@@ -15,12 +15,12 @@ jobs:
     - name: Publish Anaconda package to Anaconda.org
       uses: BEFH/anaconda-publish@v2.0
       with:
-        channels: '-c conda-forge -c bfh'
+        channels: '-c conda-forge -c bioconda -c bfh'
         AnacondaToken: ${{ secrets.ANACONDA_TOKEN }}
         publish: true
         test_all: true
         convert_win: false
-        convert_osx: true
+        convert_osx: false
   deploy_pypi:
     runs-on: ubuntu-20.04
     steps:
