@@ -529,8 +529,10 @@ class Executor(RemoteExecutor):
             f"{lsf_config['LSB_SHAREDIR']}/{lsf_config['LSF_CLUSTER']}"
             + "/logdir/lsb.events"
         )
-        lsb_params_file = (f"{lsf_config['LSF_CONFDIR']}/lsbatch/",
-                           f"{lsf_config['LSF_CLUSTER']}/configdir/lsb.params")
+        lsb_params_file = (
+            f"{lsf_config['LSF_CONFDIR']}/lsbatch/",
+            f"{lsf_config['LSF_CLUSTER']}/configdir/lsb.params",
+        )
         with open(lsb_params_file, "r") as file:
             for line in file:
                 if "=" in line and not line.strip().startswith("#"):
