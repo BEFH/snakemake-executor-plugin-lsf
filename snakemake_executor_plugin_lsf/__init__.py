@@ -8,8 +8,6 @@ __copyright__ = (
 __email__ = "johannes.koester@uni-due.de"
 __license__ = "MIT"
 
-import csv
-from io import StringIO
 import os
 import re
 import subprocess
@@ -136,7 +134,6 @@ class Executor(RemoteExecutor):
             cpus_per_task = job.resources.cpus_per_task
         # ensure that at least 1 cpu is requested
         # because 0 is not allowed by LSF
-        ## TODO: check whether this is true for LSF
         cpus_per_task = max(1, cpus_per_task)
         call += f" -n {cpus_per_task}"
 
@@ -165,7 +162,7 @@ class Executor(RemoteExecutor):
             if job.resources.get("ptile", False):
                 call += f" -R span[ptile={job.resources.get('ptile', 1)}]"
         else:
-            call += f" -R span[hosts=1]"
+            call += " -R span[hosts=1]"
 
         if job.resources.get("lsf_extra"):
             call += f" {job.resources.lsf_extra}"
@@ -370,20 +367,30 @@ class Executor(RemoteExecutor):
 
         statuses = {
             "0": "NULL",  # State null
-            "1": "PEND",  # The job is pending, i.e., it has not been dispatched yet.
-            "2": "PSUSP",  # The pending job was suspended by its owner or the LSF system administrator.
-            "4": "RUN",  # The job is running.
-            "8": "SSUSP",  # The running job was suspended by the system because an execution host was overloaded or the queue run window closed.
-            "16": "USUSP",  # The running job was suspended by its owner or the LSF system administrator.
-            "32": "EXIT",  # The job has terminated with a non-zero status - it may have been aborted due to an error in its execution or killed by its owner or by the LSF system administrator.
-            "64": "DONE",  # The job has terminated with status 0.
+            "1": "PEND",  # Job is pending (it has not been dispatched yet).
+            "2": "PSUSP",  # Pending job suspended by owner or LSF sysadmin.
+            "4": "RUN",  # Job is running.
+            "8": "SSUSP",  # Running suspended by the system. *
+            "16": "USUSP",  # Running job suspended by owner or LSF sysadmin.
+            "32": "EXIT",  # Job terminated with a non-zero status. **
+            "64": "DONE",  # Job has terminated with status 0.
             "128": "PDONE",  # Post job process done successfully.
             "256": "PERR",  # Post job process has an error.
             "512": "WAIT",  # Chunk job waiting its turn to exec.
-            "32768": "RUNKWN",  # Flag: Job status is UNKWN caused by losing contact with a remote cluster.
-            "65536": "UNKWN",  # The server batch daemon (sbatchd) on the host on which the job is processed has lost contact with the master batch daemon (mbatchd).
-            "131072": "PROV",  # This state shows that the job is dispatched to a standby power saved host, and this host is being waken up or started up.
+            "32768": "RUNKWN",  # Stat unknown (remote cluster contact lost).
+            "65536": "UNKWN",  # Stat unknown (local cluster contact lost). ***
+            "131072": "PROV",  # Job is provisional. ****
         }
+
+        #   * because execution host was overloaded or queue run window closed.
+        #   ** may have been aborted due to an execution error
+        #      or killed by owner or LSF sysadmin.
+        #  *** The server batch daemon (sbatchd) on the host on which the job
+        #      is processed has lost contact with the master batch daemon
+        #      (mbatchd).
+        # **** This state shows that the job is dispatched to a standby
+        #      power-saved host, and this host is being waken up or started up.
+
         awk_code = f"""
         awk '
             BEGIN {{
@@ -508,7 +515,7 @@ class Executor(RemoteExecutor):
     @staticmethod
     def get_lsf_config():
         lsf_config_raw = subprocess.run(
-            f"badmin showconf mbd", shell=True, capture_output=True, text=True
+            "badmin showconf mbd", shell=True, capture_output=True, text=True
         )
 
         lsf_config_lines = lsf_config_raw.stdout.strip().split("\n")
@@ -522,7 +529,8 @@ class Executor(RemoteExecutor):
             f"{lsf_config['LSB_SHAREDIR']}/{lsf_config['LSF_CLUSTER']}"
             + "/logdir/lsb.events"
         )
-        lsb_params_file = f"{lsf_config['LSF_CONFDIR']}/lsbatch/{lsf_config['LSF_CLUSTER']}/configdir/lsb.params"
+        lsb_params_file = (f"{lsf_config['LSF_CONFDIR']}/lsbatch/",
+                           f"{lsf_config['LSF_CLUSTER']}/configdir/lsb.params")
         with open(lsb_params_file, "r") as file:
             for line in file:
                 if "=" in line and not line.strip().startswith("#"):
@@ -550,7 +558,7 @@ def walltime_lsf_to_generic(w):
     if type(w) in [int, float]:
         # convert int minutes to hours minutes and seconds
         return w
-    elif type(w) == str:
+    elif type(w) is str:
         if re.match(r"^\d+(ms|[smhdw])$", w):
             return w
         elif re.match(r"^\d+:\d+$", w):
