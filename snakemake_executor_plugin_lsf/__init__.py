@@ -342,7 +342,8 @@ class Executor(RemoteExecutor):
             )
             query_duration = time.time() - time_before_query
             self.logger.debug(
-                f"The job status for running jobs was queried with command: {running_cmd}\n"
+                "The job status for running jobs was queried "
+                f"with command: {running_cmd}\n"
                 f"It took: {query_duration} seconds\n"
                 f"The output is:\n'{running}'\n"
             )
