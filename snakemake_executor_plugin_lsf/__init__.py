@@ -538,14 +538,6 @@ class Executor(RemoteExecutor):
                     if key.strip() == "DEFAULT_QUEUE":
                         lsf_config["DEFAULT_QUEUE"] = value.split("#")[0].strip()
                         break
-        lsf_conf_file = f"{lsf_config['LSF_CONFDIR']}/lsf.conf"
-        with open(lsf_conf_file, "r") as file:
-            for line in file:
-                if "=" in line and not line.strip().startswith("#"):
-                    key, value = line.strip().split("=", 1)
-                    if key.strip() == "LSF_JOB_MEMLIMIT":
-                        lsf_config["LSF_JOB_MEMLIMIT"] = value.split("#")[0].strip()
-                        break
 
         return lsf_config
 
