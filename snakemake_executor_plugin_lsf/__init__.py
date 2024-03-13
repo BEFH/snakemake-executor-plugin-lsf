@@ -143,19 +143,16 @@ class Executor(RemoteExecutor):
         conv_fcts = {"K": 1024, "M": 1, "G": 1 / 1024, "T": 1 / (1024**2)}
         mem_unit = self.lsf_config.get("LSF_UNIT_FOR_LIMITS", "MB")
         conv_fct = conv_fcts[mem_unit[0]]
-        mem_perjob = self.lsf_config.get("LSB_JOB_MEMLIMIT", "n").lower()
         if job.resources.get("mem_mb_per_cpu"):
-            mem_ = job.resources.mem_mb_per_cpu * conv_fct
+            mem_ = job.resources.mem_mb_per_cpu * conv_fct * cpus_per_task
         elif job.resources.get("mem_mb"):
-            mem_ = job.resources.mem_mb * conv_fct / cpus_per_task
+            mem_ = job.resources.mem_mb * conv_fct
         else:
             self.logger.warning(
                 "No job memory information ('mem_mb' or 'mem_mb_per_cpu') is given "
                 "- submitting without. This might or might not work on your cluster."
             )
-        if mem_perjob == "y":
-            mem_ *= cpus_per_task
-        call += f" -R rusage[mem={mem_}]"
+        call += f" -R rusage[mem={mem_}/job]"
 
         # MPI job
         if job.resources.get("mpi", False):
@@ -540,14 +537,6 @@ class Executor(RemoteExecutor):
                     key, value = line.strip().split("=", 1)
                     if key.strip() == "DEFAULT_QUEUE":
                         lsf_config["DEFAULT_QUEUE"] = value.split("#")[0].strip()
-                        break
-        lsf_conf_file = f"{lsf_config['LSF_CONFDIR']}/lsf.conf"
-        with open(lsf_conf_file, "r") as file:
-            for line in file:
-                if "=" in line and not line.strip().startswith("#"):
-                    key, value = line.strip().split("=", 1)
-                    if key.strip() == "LSF_JOB_MEMLIMIT":
-                        lsf_config["LSF_JOB_MEMLIMIT"] = value.split("#")[0].strip()
                         break
 
         return lsf_config
