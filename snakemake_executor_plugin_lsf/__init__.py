@@ -143,18 +143,15 @@ class Executor(RemoteExecutor):
         conv_fcts = {"K": 1024, "M": 1, "G": 1 / 1024, "T": 1 / (1024**2)}
         mem_unit = self.lsf_config.get("LSF_UNIT_FOR_LIMITS", "MB")
         conv_fct = conv_fcts[mem_unit[0]]
-        mem_perjob = self.lsf_config.get("LSB_JOB_MEMLIMIT", "n").lower()
         if job.resources.get("mem_mb_per_cpu"):
-            mem_ = job.resources.mem_mb_per_cpu * conv_fct
+            mem_ = job.resources.mem_mb_per_cpu * conv_fct * cpus_per_task
         elif job.resources.get("mem_mb"):
-            mem_ = job.resources.mem_mb * conv_fct / cpus_per_task
+            mem_ = job.resources.mem_mb * conv_fct
         else:
             self.logger.warning(
                 "No job memory information ('mem_mb' or 'mem_mb_per_cpu') is given "
                 "- submitting without. This might or might not work on your cluster."
             )
-        if mem_perjob == "y":
-            mem_ *= cpus_per_task
         call += f" -R rusage[mem={mem_}]"
 
         # MPI job
