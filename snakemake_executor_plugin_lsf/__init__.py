@@ -152,7 +152,7 @@ class Executor(RemoteExecutor):
                 "No job memory information ('mem_mb' or 'mem_mb_per_cpu') is given "
                 "- submitting without. This might or might not work on your cluster."
             )
-        call += f" -R rusage[mem={mem_}]"
+        call += f" -R rusage[mem={mem_}/job]"
 
         # MPI job
         if job.resources.get("mpi", False):
