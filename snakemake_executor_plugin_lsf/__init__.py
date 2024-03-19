@@ -152,7 +152,10 @@ class Executor(RemoteExecutor):
                 "No job memory information ('mem_mb' or 'mem_mb_per_cpu') is given "
                 "- submitting without. This might or might not work on your cluster."
             )
-        call += f" -R rusage[mem={mem_}/job]"
+        # -hl should enforce that memory is requested per job and per host (not per
+        # thread, per task or anything else). For the docs, see:
+        # * https://www.ibm.com/docs/en/spectrum-lsf/10.1.0?topic=options-hl
+        call += f" -hl -R rusage[mem={mem_}]"
 
         # MPI job
         if job.resources.get("mpi", False):
