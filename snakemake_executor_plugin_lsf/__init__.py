@@ -541,7 +541,9 @@ class Executor(RemoteExecutor):
                         lsf_config["DEFAULT_QUEUE"] = value.split("#")[0].strip()
                         break
 
-        lsf_config["LSF_MEMFMT"] = os.environ.get("SNAKEMAKE_LSF_MEMFMT", "percpu").lower()
+        lsf_config["LSF_MEMFMT"] = os.environ.get(
+            "SNAKEMAKE_LSF_MEMFMT", "percpu"
+        ).lower()
 
         return lsf_config
 
