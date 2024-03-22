@@ -137,9 +137,6 @@ class Executor(RemoteExecutor):
         cpus_per_task = max(1, cpus_per_task)
         call += f" -n {cpus_per_task}"
 
-        # if job.resources.get("constraint"):
-        #    call += f" -C {job.resources.constraint}"
-
         conv_fcts = {"K": 1024, "M": 1, "G": 1 / 1024, "T": 1 / (1024**2)}
         mem_unit = self.lsf_config.get("LSF_UNIT_FOR_LIMITS", "MB")
         conv_fct = conv_fcts[mem_unit[0]]
