@@ -57,7 +57,7 @@ to specify them for every rule. Snakemake already has reasonable
 defaults built in, which are automatically activated when using any non-local executor
 (hence also with lsf). Use mem_mb_per_cpu to give the standard LSF type memory per CPU
 
-## MPI jobs {#cluster-lsf-mpi}
+## MPI jobs
 
 Snakemake\'s LSF backend also supports MPI jobs, see
 `snakefiles-mpi`{.interpreted-text role="ref"} for details.
@@ -92,7 +92,6 @@ You can use the following specifications:
 |------------------------------------|------------------|----------------------------------------|
 | `-q`                               | `lsf_queue`      | the queue a rule/job is to use         |
 | `--W`                              | `walltime`       | the walltime per job in minutes        |
-| `--constraint`                     | `constraint`     | may hold features on some clusters     |
 | `-R "rusage[mem=<memory_amount>]"` | `mem`, `mem_mb`  | memory a cluster node must provide     |
 |                                    |                  | (`mem`: string with unit, `mem_mb`: i) |
 | `-R "rusage[mem=<memory_amount>]"` | `mem_mb_per_cpu` | memory per reserved CPU                |
