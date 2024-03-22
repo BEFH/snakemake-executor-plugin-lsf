@@ -25,6 +25,16 @@ Usually, it is advisable to persist such settings via a
 [configuration profile](https://snakemake.readthedocs.io/en/latest/executing/cli.html#profiles), which
 can be provided system-wide, per user, and in addition per workflow.
 
+This is an example of the relevant profile settings:
+
+```yaml
+jobs: '<max concurrent jobs>'
+executor: lsf
+default-resources:
+  - 'lsf_project=<your LSF project>'
+  - 'lsf_queue=<your LSF queue>'
+```
+
 ## Ordinary SMP jobs
 
 Most jobs will be carried out by programs which are either single core
@@ -47,7 +57,7 @@ to specify them for every rule. Snakemake already has reasonable
 defaults built in, which are automatically activated when using any non-local executor
 (hence also with lsf). Use mem_mb_per_cpu to give the standard LSF type memory per CPU
 
-## MPI jobs {#cluster-slurm-mpi}
+## MPI jobs {#cluster-lsf-mpi}
 
 Snakemake\'s LSF backend also supports MPI jobs, see
 `snakefiles-mpi`{.interpreted-text role="ref"} for details.
@@ -74,18 +84,21 @@ $ snakemake --set-resources calc_pi:mpi="mpiexec" ...
 
 A workflow rule may support a number of
 [resource specifications](https://snakemake.readthedocs.io/en/latest/snakefiles/rules.html#resources).
-For a LSF cluster, a mapping between Snakemake and SLURM needs to be performed.
+For a LSF cluster, a mapping between Snakemake and LSF needs to be performed.
 
 You can use the following specifications:
 
-| LSF        | Snakemake  | Description              |
-|----------------|------------|---------------------------------------|
-| `-q`  | `lsf_queue`    | the queue a rule/job is to use |
-| `--W`  | `walltime`  | the walltime per job in minutes       |
-| `--constraint`   | `constraint`        | may hold features on some clusters    |
-| `-R "rusage[mem=<memory_amount>]"`        | `mem`, `mem_mb`   | memory a cluster node must      |
-|                |            | provide (`mem`: string with unit), `mem_mb`: i                               |
-| `-R "rusage[mem=<memory_amount>]"`              | `mem_mb_per_cpu`     | memory per reserved CPU               |
+| LSF                                | Snakemake        | Description                            |
+|------------------------------------|------------------|----------------------------------------|
+| `-q`                               | `lsf_queue`      | the queue a rule/job is to use         |
+| `--W`                              | `walltime`       | the walltime per job in minutes        |
+| `--constraint`                     | `constraint`     | may hold features on some clusters     |
+| `-R "rusage[mem=<memory_amount>]"` | `mem`, `mem_mb`  | memory a cluster node must provide     |
+|                                    |                  | (`mem`: string with unit, `mem_mb`: i) |
+| `-R "rusage[mem=<memory_amount>]"` | `mem_mb_per_cpu` | memory per reserved CPU                |
+| omit `-R span[hosts=1]`            | `mpi`            | Allow splitting across nodes for MPI   |
+| `-R span[ptile=<ptile>]`           | `ptile`          | Processors per host. Reqires `mpi`     |
+| Other `bsub` arguments             | `lsf_extra`      | Other args to pass to `bsub` (str)     |
 
 
 Each of these can be part of a rule, e.g.:
@@ -124,3 +137,13 @@ rule myrule:
 ```
 
 Again, rather use a [profile](https://snakemake.readthedocs.io/en/latest/executing/cli.html#profiles) to specify such resources.
+
+## Clusters that use per-job memory requests instead of per-core
+
+By default, this plugin converts the specified memory request into the per-core request expected by most LSF clusters.
+So `threads: 4` and `mem_mb=128` will result in `-R rusage[mem=32]`. If the request should be per-job on your cluster
+(i.e. `-R rusage[mem=<mem_mb>]`) then set the environment variable `SNAKEMAKE_LSF_MEMFMT` to `perjob`.
+
+The executor automatically detects the request unit from cluster configuration, so if your cluster does not use MB,
+you do not need to do anything.
+

@@ -144,15 +144,17 @@ class Executor(RemoteExecutor):
         mem_unit = self.lsf_config.get("LSF_UNIT_FOR_LIMITS", "MB")
         conv_fct = conv_fcts[mem_unit[0]]
         if job.resources.get("mem_mb_per_cpu"):
-            mem_ = job.resources.mem_mb_per_cpu * conv_fct * cpus_per_task
+            mem_ = job.resources.mem_mb_per_cpu * conv_fct
         elif job.resources.get("mem_mb"):
-            mem_ = job.resources.mem_mb * conv_fct
+            mem_ = job.resources.mem_mb * conv_fct / cpus_per_task
         else:
             self.logger.warning(
                 "No job memory information ('mem_mb' or 'mem_mb_per_cpu') is given "
                 "- submitting without. This might or might not work on your cluster."
             )
-        call += f" -R rusage[mem={mem_}/job]"
+        if self.lsf_config["LSF_MEMFMT"] == "perjob":
+            mem_ *= cpus_per_task
+        call += f" -R rusage[mem={mem_}]"
 
         # MPI job
         if job.resources.get("mpi", False):
@@ -528,8 +530,8 @@ class Executor(RemoteExecutor):
             + "/logdir/lsb.events"
         )
         lsb_params_file = (
-            f"{lsf_config['LSF_CONFDIR']}/lsbatch/",
-            f"{lsf_config['LSF_CLUSTER']}/configdir/lsb.params",
+            f"{lsf_config['LSF_CONFDIR']}/lsbatch/"
+            f"{lsf_config['LSF_CLUSTER']}/configdir/lsb.params"
         )
         with open(lsb_params_file, "r") as file:
             for line in file:
@@ -538,6 +540,10 @@ class Executor(RemoteExecutor):
                     if key.strip() == "DEFAULT_QUEUE":
                         lsf_config["DEFAULT_QUEUE"] = value.split("#")[0].strip()
                         break
+
+        lsf_config["LSF_MEMFMT"] = os.environ.get(
+            "SNAKEMAKE_LSF_MEMFMT", "percpu"
+        ).lower()
 
         return lsf_config
 
