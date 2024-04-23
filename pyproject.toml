@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "snakemake-executor-plugin-lsf"
-version = "0.2.3"
+version = "0.2.4"
 description = "A Snakemake executor plugin for submitting jobs to a LSF cluster."
 authors = [
     "Brian Fulton-Howard <brian.fulton-howard@mssm.edu>",
