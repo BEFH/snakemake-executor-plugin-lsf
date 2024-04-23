@@ -15,6 +15,7 @@ import time
 from typing import List, Generator
 from collections import Counter
 import uuid
+import math
 from snakemake_interface_executor_plugins.executors.base import SubmittedJobInfo
 from snakemake_interface_executor_plugins.executors.remote import RemoteExecutor
 from snakemake_interface_executor_plugins.settings import CommonSettings
@@ -557,7 +558,7 @@ def walltime_lsf_to_generic(w):
         if re.match(r"^\d+(ms|[smhdw])$", w):
             return w
         elif re.match(r"^\d+:\d+$", w):
-            # convert "HH:MM" to hours minutes and seconds
+            # convert "HH:MM" to hours and minutes
             h, m = map(float, w.split(":"))
         elif re.match(r"^\d+:\d+:\d+$", w):
             # convert "HH:MM:SS" to hours minutes and seconds
@@ -568,7 +569,7 @@ def walltime_lsf_to_generic(w):
             s = (m % 1) * 60
             m = round(m)
         elif re.match(r"^\d+\.\d+$", w):
-            return float(w)
+            return math.ceil(w)
         elif re.match(r"^\d+$", w):
             return int(w)
         else:
@@ -576,7 +577,7 @@ def walltime_lsf_to_generic(w):
     h = int(h)
     m = int(m)
     s = int(s)
-    return (h * 60) + m + (s / 60)
+    return math.ceil((h * 60) + m + (s / 60))
 
 
 def generalize_lsf(rules, runtime=True, memory="perthread_to_perjob"):
@@ -595,7 +596,10 @@ def generalize_lsf(rules, runtime=True, memory="perthread_to_perjob"):
                 del rules._rules[k].rule.resources["time_min"]
             elif "runtime" in res_.keys():
                 runtime_ = walltime_lsf_to_generic(res_["runtime"])
-            rules._rules[k].rule.resources["runtime"] = runtime_
+            else:
+                runtime_ = False
+            if runtime_:
+                rules._rules[k].rule.resources["runtime"] = runtime_
         if memory == "perthread_to_perjob":
             if "mem_mb" in res_.keys():
                 mem_ = float(res_["mem_mb"]) * res_["_cores"]
