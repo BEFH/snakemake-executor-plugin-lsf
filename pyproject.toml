@@ -15,7 +15,7 @@ documentation = "https://snakemake.github.io/snakemake-plugin-catalog/plugins/ex
 keywords = ["snakemake", "plugin", "executor", "cluster", "lsf"]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.11"
 snakemake-interface-common = "^1.17.1"
 snakemake-interface-executor-plugins = "^9.0.0"
 snakemake-executor-plugin-lsf-jobstep = "^0.1.10"
