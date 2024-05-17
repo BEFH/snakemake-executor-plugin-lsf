@@ -162,7 +162,7 @@ class Executor(RemoteExecutor):
             call += " -R span[hosts=1]"
 
         if job.resources.get("lsf_extra", False):
-            call += f" {job.resources.get("lsf_extra")}"
+            call += f" {job.resources.get('lsf_extra')}"
 
         exec_job = self.format_job_exec(job)
 
