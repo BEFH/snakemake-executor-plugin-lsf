@@ -161,8 +161,8 @@ class Executor(RemoteExecutor):
         else:
             call += " -R span[hosts=1]"
 
-        if job.resources.get("lsf_extra"):
-            call += f" {job.resources.lsf_extra}"
+        if job.resources.get("lsf_extra", False):
+            call += f" {job.resources.get("lsf_extra")}"
 
         exec_job = self.format_job_exec(job)
 
@@ -181,7 +181,12 @@ class Executor(RemoteExecutor):
             raise WorkflowError(
                 f"LSF job submission failed. The error message was {e.output}"
             )
-        lsf_jobid = out.split(" ")[1][1:-1]
+
+        lsf_jobid = re.search(r"Job <(\d+)>", out)[1]
+        if not lsf_jobid:
+            raise WorkflowError(
+                f"Could not extract LSF job ID. The submission message was\n{out}"
+            )
         lsf_logfile = lsf_logfile.replace("%J", lsf_jobid)
         self.logger.info(
             f"Job {job.jobid} has been submitted with LSF jobid {lsf_jobid} "
