@@ -76,9 +76,20 @@ class Executor(RemoteExecutor):
         # with job_info being of type
         # snakemake_interface_executor_plugins.executors.base.SubmittedJobInfo.
 
-        log_folder = f"group_{job.name}" if job.is_group() else f"rule_{job.name}"
+        if job.is_group():
+            # use the group name, which is in groupid
+            log_folder = f"group_{job.groupid}"
+            # get all wildcards of all the jobs in the group and prepend each with
+            # job name, as wildcards of same name can contain different values across jobs
+            wildcard_dict = {
+                f"{j.name}__{k}": v
+                for j in job.jobs
+                for k, v in j.wildcards_dict.items()
+            }
+        else:
+            log_folder = f"rule_{job.name}"
+            wildcard_dict = job.wildcards_dict
 
-        wildcard_dict = job.wildcards_dict
         if wildcard_dict:
             wildcard_dict_noslash = {
                 k: v.replace("/", "___") for k, v in wildcard_dict.items()
