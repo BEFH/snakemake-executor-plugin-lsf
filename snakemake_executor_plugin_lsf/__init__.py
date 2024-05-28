@@ -79,8 +79,9 @@ class Executor(RemoteExecutor):
         if job.is_group():
             # use the group name, which is in groupid
             log_folder = f"group_{job.groupid}"
-            # get all wildcards of all the jobs in the group and prepend each with
-            # job name, as wildcards of same name can contain different values across jobs
+            # get all wildcards of all the jobs in the group and
+            # prepend each with job name, as wildcards of same
+            # name can contain different values across jobs
             wildcard_dict = {
                 f"{j.name}__{k}": v
                 for j in job.jobs
