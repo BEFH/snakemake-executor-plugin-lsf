@@ -12,7 +12,7 @@ import os
 import re
 import subprocess
 import time
-from typing import List, Generator
+from typing import List, AsyncGenerator
 from collections import Counter
 import uuid
 import math
@@ -172,7 +172,7 @@ class Executor(RemoteExecutor):
 
     async def check_active_jobs(
         self, active_jobs: List[SubmittedJobInfo]
-    ) -> Generator[SubmittedJobInfo, None, None]:
+    ) -> AsyncGenerator[SubmittedJobInfo, None]:
         # Check the status of active jobs.
 
         # You have to iterate over the given list active_jobs.
