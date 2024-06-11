@@ -453,19 +453,20 @@ class Executor(RemoteExecutor):
         """
         # MPI job
         if job.resources.get("mpi", False):
-            if job.resources.get('span', False):
+            if job.resources.get("span", False):
                 span = job.resources.get("span")
-            elif job.resources.get('ptile', False):
+            elif job.resources.get("ptile", False):
                 span = f"ptile={job.resources.get('ptile')}"
-            elif job.resources.get('cpus_per_node', False):
+            elif job.resources.get("cpus_per_node", False):
                 span = f"ptile={job.resources.get('cpus_per_node')}"
-            
+
             # validate that span is a valid LSF span
             # https://www.ibm.com/docs/en/spectrum-lsf/10.1.0?topic=strings-span-string
             # There is no support here for the 'tasks' because LSF only has a concept of
             # total cores and not the Slurm tasks.
-            # We have implemented cpus_per_node to use ptile to determine the cores per host.
-            if not re.match(r"^ptile=(('!'|\w+:\d+|\d+),?)+|hosts=\d+|stripe(=\d+)?$", span):
+            # We have implemented cpus_per_node to use ptile for cores per host.
+            valid_span = r"^ptile=(('!'|\w+:\d+|\d+),?)+|hosts=\d+|stripe(=\d+)?$"
+            if not re.match(valid_span, span):
                 raise WorkflowError(f"Invalid span: {span}")
         else:
             span = "hosts=1"
