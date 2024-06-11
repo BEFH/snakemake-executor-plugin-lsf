@@ -59,15 +59,6 @@ class Executor(RemoteExecutor):
         self._fallback_queue = None
         self.lsf_config = self.get_lsf_config()
 
-    def additional_general_args(self):
-        # we need to set -j to 1 here, because the behaviour
-        # of snakemake is to submit all jobs at once, otherwise.
-        # However, the LSF Executor is supposed to submit jobs
-        # one after another, so we need to set -j to 1 for the
-        # JobStep Executor, which in turn handles the launch of
-        # LSF jobsteps.
-        return "--executor lsf-jobstep --jobs 1"
-
     def run_job(self, job: JobExecutorInterface):
         # Implement here how to run a job.
         # You can access the job's resources, etc.
