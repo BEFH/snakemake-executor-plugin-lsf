@@ -129,40 +129,9 @@ class Executor(RemoteExecutor):
                 "default via --default-resources."
             )
 
-        cpus_per_task = job.threads
-        if job.resources.get("cpus_per_task"):
-            if not isinstance(cpus_per_task, int):
-                raise WorkflowError(
-                    f"cpus_per_task must be an integer, but is {cpus_per_task}"
-                )
-            cpus_per_task = job.resources.cpus_per_task
-        # ensure that at least 1 cpu is requested
-        # because 0 is not allowed by LSF
-        cpus_per_task = max(1, cpus_per_task)
-        call += f" -n {cpus_per_task}"
-
-        conv_fcts = {"K": 1024, "M": 1, "G": 1 / 1024, "T": 1 / (1024**2)}
-        mem_unit = self.lsf_config.get("LSF_UNIT_FOR_LIMITS", "MB")
-        conv_fct = conv_fcts[mem_unit[0]]
-        if job.resources.get("mem_mb_per_cpu"):
-            mem_ = job.resources.mem_mb_per_cpu * conv_fct
-        elif job.resources.get("mem_mb"):
-            mem_ = job.resources.mem_mb * conv_fct / cpus_per_task
-        else:
-            self.logger.warning(
-                "No job memory information ('mem_mb' or 'mem_mb_per_cpu') is given "
-                "- submitting without. This might or might not work on your cluster."
-            )
-        if self.lsf_config["LSF_MEMFMT"] == "perjob":
-            mem_ *= cpus_per_task
-        call += f" -R rusage[mem={mem_}]"
-
-        # MPI job
-        if job.resources.get("mpi", False):
-            if job.resources.get("ptile", False):
-                call += f" -R span[ptile={job.resources.get('ptile', 1)}]"
-        else:
-            call += " -R span[hosts=1]"
+        call += f" -n {self.get_cpus(job)}"
+        call += f" -R rusage[mem={self.get_mem(job)}]"
+        call += f" -R span[{self.get_span(job)}]"
 
         if job.resources.get("lsf_extra", False):
             call += f" {job.resources.get('lsf_extra')}"
@@ -439,6 +408,69 @@ class Executor(RemoteExecutor):
 
         return (res, query_duration)
 
+    def get_cpus(self, job: JobExecutorInterface):
+        """
+        Gets the LSF cpu request amount for the job.
+        """
+        cpus_total = job.threads
+        if job.resources.get("cpus_per_task"):
+            cpus_per_task = job.resources.cpus_per_task
+            if not isinstance(cpus_per_task, int):
+                raise WorkflowError(
+                    f"cpus_per_task must be an integer, but is {cpus_per_task}"
+                )
+            cpus_total = cpus_per_task
+        # ensure that at least 1 cpu is requested
+        # because 0 is not allowed by LSF
+        return max(1, cpus_total)
+
+    def get_mem(self, job: JobExecutorInterface):
+        """
+        Gets the LSF memory request amount for the job.
+        Handles the request regardless of whether memory
+        is allocated per job or per cpu.
+        """
+        conv_fcts = {"K": 1024, "M": 1, "G": 1 / 1024, "T": 1 / (1024**2)}
+        mem_unit = self.lsf_config.get("LSF_UNIT_FOR_LIMITS", "MB")
+        conv_fct = conv_fcts[mem_unit[0]]
+        cpus_total = self.get_cpus(job)
+        if job.resources.get("mem_mb_per_cpu"):
+            mem_ = job.resources.mem_mb_per_cpu * conv_fct
+        elif job.resources.get("mem_mb"):
+            mem_ = job.resources.mem_mb * conv_fct / cpus_total
+        else:
+            self.logger.warning(
+                "No job memory information ('mem_mb' or 'mem_mb_per_cpu') is given "
+                "- submitting without. This might or might not work on your cluster."
+            )
+        if self.lsf_config["LSF_MEMFMT"] == "perjob":
+            mem_ *= cpus_total
+        return mem_
+
+    def get_span(self, job: JobExecutorInterface):
+        """
+        Gets the LSF span string for the job
+        """
+        # MPI job
+        if job.resources.get("mpi", False):
+            if job.resources.get('span', False):
+                span = job.resources.get("span")
+            elif job.resources.get('ptile', False):
+                span = f"ptile={job.resources.get('ptile')}"
+            elif job.resources.get('cpus_per_node', False):
+                span = f"ptile={job.resources.get('cpus_per_node')}"
+            
+            # validate that span is a valid LSF span
+            # https://www.ibm.com/docs/en/spectrum-lsf/10.1.0?topic=strings-span-string
+            # There is no support here for the 'tasks' because LSF only has a concept of
+            # total cores and not the Slurm tasks.
+            # We have implemented cpus_per_node to use ptile to determine the cores per host.
+            if not re.match(r"^ptile=(('!'|\w+:\d+|\d+),?)+|hosts=\d+|stripe(=\d+)?$", span):
+                raise WorkflowError(f"Invalid span: {span}")
+        else:
+            span = "hosts=1"
+        return span
+
     def get_project_arg(self, job: JobExecutorInterface):
         """
         checks whether the desired project is valid,
@@ -446,10 +478,7 @@ class Executor(RemoteExecutor):
         else raises an error - implicetly.
         """
         if job.resources.get("lsf_project"):
-            # here, we check whether the given or guessed project is valid
-            # if not, a WorkflowError is raised
-            # self.test_project(job.resources.lsf_project)
-            # disabled because I do not know how to do this
+            # No current way to check if the project is valid
             return f" -P {job.resources.lsf_project}"
         else:
             if self._fallback_project_arg is None:
