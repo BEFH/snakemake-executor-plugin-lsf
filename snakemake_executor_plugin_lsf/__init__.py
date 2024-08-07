@@ -528,7 +528,7 @@ class Executor(RemoteExecutor):
         return ""
 
     @staticmethod
-    def get_lsf_config():
+    def get_lsf_config(path="/etc/lsf.conf"):
         try:
             lsf_config_raw = subprocess.run(
                 "badmin showconf mbd", shell=True, capture_output=True, text=True, check=True
