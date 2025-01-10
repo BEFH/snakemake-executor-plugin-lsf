@@ -244,7 +244,10 @@ class Executor(RemoteExecutor):
             async with self.status_rate_limiter:
                 (status_of_jobs, job_query_duration) = await self.job_stati_bjobs()
                 if status_of_jobs is None and job_query_duration is None:
-                    self.logger.debug(f"Could not check status of job {self.run_uuid}, see error above.")
+                    self.logger.debug(
+                        f"Could not check status of job {self.run_uuid}. "
+                        "See error above."
+                    )
                     continue
                 job_query_durations.append(job_query_duration)
                 self.logger.debug(f"status_of_jobs after bjobs is: {status_of_jobs}")
@@ -352,7 +355,7 @@ class Executor(RemoteExecutor):
         statuses_all = []
 
         res = query_duration = None
-        
+
         try:
             running_cmd = f"bjobs -noheader -o 'jobid stat' -aJ '*{uuid}*'"
             time_before_query = time.time()
