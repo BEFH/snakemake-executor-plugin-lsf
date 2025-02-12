@@ -537,7 +537,7 @@ class Executor(RemoteExecutor):
         lsf_config_tuples = [tuple(x.strip().split(" = ")) for x in lsf_config_lines]
         lsf_config = {x[0]: x[1] for x in lsf_config_tuples[1:]}
         clusters = subprocess.run(
-            ["lsclusters", "-w"], capture_output=True, text=True
+            ["lsclusters", "-w"], shell=True, capture_output=True, text=True
         )
         lsf_config["LSF_CLUSTER"] = clusters.stdout.split("\n")[1].split()[0]
         lsf_config["LSB_EVENTS"] = (
