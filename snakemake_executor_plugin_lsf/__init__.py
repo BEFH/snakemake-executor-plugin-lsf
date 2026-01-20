@@ -16,6 +16,7 @@ from typing import List, Generator
 from collections import Counter
 import uuid
 import math
+import shlex
 from snakemake_interface_executor_plugins.executors.base import SubmittedJobInfo
 from snakemake_interface_executor_plugins.executors.remote import RemoteExecutor
 from snakemake_interface_executor_plugins.settings import CommonSettings
@@ -487,7 +488,7 @@ class Executor(RemoteExecutor):
                 self._fallback_queue = self.get_default_queue(job)
             queue = self._fallback_queue
         if queue:
-            return f" -q {queue}"
+            return f" -q {shlex.quote(queue)}"
         else:
             return ""
 
