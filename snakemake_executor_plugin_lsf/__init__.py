@@ -228,7 +228,7 @@ class Executor(RemoteExecutor):
         #
         # async with self.status_rate_limiter:
         #    # query remote middleware here
-        fail_stati = ("SSUSP", "EXIT", "USUSP")
+        fail_stati = ("EXIT", "USUSP", "PSUSP")
         # Cap sleeping time between querying the status of all active jobs:
         max_sleep_time = 180
 
