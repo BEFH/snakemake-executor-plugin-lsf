@@ -538,14 +538,22 @@ class Executor(RemoteExecutor):
         return ""
 
     @staticmethod
-    def get_lsf_config():
-        lsf_config_raw = subprocess.run(
-            "badmin showconf mbd", shell=True, capture_output=True, text=True
-        )
-
-        lsf_config_lines = lsf_config_raw.stdout.strip().split("\n")
-        lsf_config_tuples = [tuple(x.strip().split(" = ")) for x in lsf_config_lines]
-        lsf_config = {x[0]: x[1] for x in lsf_config_tuples[1:]}
+    def get_lsf_config(path="/etc/lsf.conf"):
+        try:
+            lsf_config_raw = subprocess.run(
+                "badmin showconf mbd", shell=True, capture_output=True, text=True, check=True
+            ).stdout
+        except subprocess.CalledProcessError:
+            print("Could not get LSF config from badmin showconf mbd")
+            config_file_path = os.environ.get('LSF_CONFIG_FILE', path)
+            try:
+                with open(config_file_path, 'r') as file:
+                    lsf_config_raw = file.read()
+            except FileNotFoundError:
+                raise FileNotFoundError(f"LSF config file not found at {config_file_path}")
+        lsf_config_lines = lsf_config_raw.strip().split("\n")
+        lsf_config_tuples = [tuple(x.strip().split("=")) for x in lsf_config_lines if len(tuple(x.strip().split("=")))==2]
+        lsf_config = {x[0]: x[1] for x in lsf_config_tuples}
         clusters = subprocess.run(
             "lsclusters", shell=True, capture_output=True, text=True
         )
