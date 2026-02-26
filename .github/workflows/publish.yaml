@@ -23,7 +23,7 @@ jobs:
         convert_win: false
         convert_osx: false
   deploy_pypi:
-    runs-on: ubuntu-latest4
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5
