@@ -131,9 +131,13 @@ class Executor(RemoteExecutor):
             )
 
         call += f" -n {self.get_cpus(job)}"
+<<<<<<< HEAD
         mem_ = self.get_mem(job)
         if mem_:
             call += f" -R rusage[mem={mem_}]"
+=======
+        call += f" -R rusage[mem={self.get_mem(job)}]"
+>>>>>>> 724cd0338df63544c79c3aa159816204e7407c25
         call += f" -R span[{self.get_span(job)}]"
 
         if job.resources.get("lsf_extra", False):
@@ -436,6 +440,7 @@ class Executor(RemoteExecutor):
         # because 0 is not allowed by LSF
         return max(1, cpus_total)
 
+<<<<<<< HEAD
         if job.resources.get("mem_mb_per_cpu"):
             mem_ = job.resources.mem_mb_per_cpu * conv_fct
         elif job.resources.get("mem_mb"):
@@ -451,6 +456,8 @@ class Executor(RemoteExecutor):
         if mem_:
             call += f" -R rusage[mem={mem_}]"
 
+=======
+>>>>>>> 724cd0338df63544c79c3aa159816204e7407c25
     def get_mem(self, job: JobExecutorInterface):
         """
         Gets the LSF memory request amount for the job.
@@ -470,7 +477,10 @@ class Executor(RemoteExecutor):
                 "No job memory information ('mem_mb' or 'mem_mb_per_cpu') is given "
                 "- submitting without. This might or might not work on your cluster."
             )
+<<<<<<< HEAD
             mem_ = None
+=======
+>>>>>>> 724cd0338df63544c79c3aa159816204e7407c25
         if self.lsf_config["LSF_MEMFMT"] == "perjob":
             mem_ *= cpus_total
         return mem_
