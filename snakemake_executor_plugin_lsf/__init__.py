@@ -163,9 +163,11 @@ class Executor(RemoteExecutor):
                 "No job memory information ('mem_mb' or 'mem_mb_per_cpu') is given "
                 "- submitting without. This might or might not work on your cluster."
             )
-        if self.lsf_config["LSF_MEMFMT"] == "perjob":
+            mem_ = None
+        if mem_ and self.lsf_config["LSF_MEMFMT"] == "perjob":
             mem_ *= cpus_per_task
-        call += f" -R rusage[mem={mem_}]"
+        if mem_:
+            call += f" -R rusage[mem={mem_}]"
 
         # MPI job
         if job.resources.get("mpi", False):
