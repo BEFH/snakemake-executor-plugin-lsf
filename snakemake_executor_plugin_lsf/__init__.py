@@ -25,7 +25,6 @@ from snakemake_interface_executor_plugins.jobs import (
 )
 from snakemake_interface_common.exceptions import WorkflowError
 
-
 # Required:
 # Specify common settings shared by various executors.
 common_settings = CommonSettings(
@@ -205,7 +204,7 @@ class Executor(RemoteExecutor):
 
         for i in range(status_attempts):
             async with self.status_rate_limiter:
-                (status_of_jobs, job_query_duration) = await self.job_stati_bjobs()
+                status_of_jobs, job_query_duration = await self.job_stati_bjobs()
                 if status_of_jobs is None and job_query_duration is None:
                     self.logger.debug(
                         f"Could not check status of job {self.run_uuid}. "
@@ -435,7 +434,6 @@ class Executor(RemoteExecutor):
         # ensure that at least 1 cpu is requested
         # because 0 is not allowed by LSF
         return max(1, cpus_total)
-
 
     def get_mem(self, job: JobExecutorInterface):
         """
