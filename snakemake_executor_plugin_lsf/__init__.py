@@ -16,15 +16,14 @@ from typing import List, Generator
 from collections import Counter
 import uuid
 import math
-import shlex
 from snakemake_interface_executor_plugins.executors.base import SubmittedJobInfo
 from snakemake_interface_executor_plugins.executors.remote import RemoteExecutor
 from snakemake_interface_executor_plugins.settings import CommonSettings
-from snakemake_interface_executor_plugins.jobs import (
-    JobExecutorInterface,
-)
+from snakemake_interface_executor_plugins.jobs import JobExecutorInterface
 from snakemake_interface_common.exceptions import WorkflowError
-
+import snakemake.resources
+from humanfriendly import InvalidTimespan
+import shlex
 
 # Required:
 # Specify common settings shared by various executors.
@@ -67,6 +66,31 @@ class Executor(RemoteExecutor):
         # JobStep Executor, which in turn handles the launch of
         # LSF jobsteps.
         return "--executor lsf-jobstep --jobs 1"
+
+    def process_time(self, time):
+        if type(time) in [int, float]:
+            return time
+        elif type(time) is str:
+            try:
+                return math.ceil(snakemake.resources.parse_timespan(time) / 60)
+            except InvalidTimespan:
+                if re.match(r"^\d+:\d\d:\d\d$", time):
+                    h, m, s = map(float, time.split(":"))
+                    return math.ceil((h * 60) + m + (s / 60))
+                elif re.match(r"^\d+:\d\d$", time):
+                    m, s = map(float, time.split(":"))
+                    self.logger.warning(
+                        "Assuming min:sec for compatibility with other "
+                        "executors, despite LSF using hours and minutes."
+                    )
+                    return math.ceil(m + (s / 60))
+                else:
+                    self.logger.warning(
+                        "time is a string but not parsable. Passing as-is."
+                    )
+                    return shlex.quote(time)
+        else:
+            raise ValueError(f"Invalid time format: {time}")
 
     def run_job(self, job: JobExecutorInterface):
         # Implement here how to run a job.
@@ -122,9 +146,11 @@ class Executor(RemoteExecutor):
         call += self.get_queue_arg(job)
 
         if job.resources.get("runtime"):
-            call += f" -W {job.resources.runtime}"
+            call += f" -W {self.process_time(job.resources.runtime)}"
+        elif job.resources.get("time"):
+            call += f" -W {self.process_time(job.resources.time)}"
         elif job.resources.get("walltime"):
-            call += f" -W {job.resources.walltime}"
+            call += f" -W {self.process_time(job.resources.walltime)}"
         elif job.resources.get("time_min"):
             if not type(job.resources.time_min) in [int, float]:
                 self.logger.error("time_min must be a number")
@@ -245,7 +271,7 @@ class Executor(RemoteExecutor):
 
         for i in range(status_attempts):
             async with self.status_rate_limiter:
-                (status_of_jobs, job_query_duration) = await self.job_stati_bjobs()
+                status_of_jobs, job_query_duration = await self.job_stati_bjobs()
                 if status_of_jobs is None and job_query_duration is None:
                     self.logger.debug(
                         f"Could not check status of job {self.run_uuid}. "
