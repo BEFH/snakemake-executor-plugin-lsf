@@ -489,6 +489,29 @@ class Executor(RemoteExecutor):
 
 
     def process_time(self, time) -> str | int:
+        """
+        Convert a time specification to minutes (integer).
+
+        Supports:
+        - Numeric values (assumed to be in minutes): 120, 120.5
+        - Snakemake-style time strings: "6d", "12h", "30m", "90s", "2d12h30m"
+        - SLURM time formats:
+            - "minutes" (e.g., "60")
+            - "minutes:seconds" (interpreted as hours:minutes, e.g., "60:30")
+            - "hours:minutes:seconds" (e.g., "1:30:45")
+            - "days-hours" (e.g., "2-12")
+            - "days-hours:minutes" (e.g., "2-12:30")
+            - "days-hours:minutes:seconds" (e.g., "2-12:30:45")
+
+        Args:
+            time: Time specification as string, int, or float
+
+        Returns:
+            Time in minutes as integer (fractional minutes are rounded)
+            Initial string if it cannot be parsed as a time specification
+
+        """
+
         # Return rounded up if numeric
         if isinstance(time, (int, float)):
             return math.ceil(time)
