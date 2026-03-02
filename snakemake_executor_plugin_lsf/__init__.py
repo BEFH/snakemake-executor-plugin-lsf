@@ -67,31 +67,6 @@ class Executor(RemoteExecutor):
         # LSF jobsteps.
         return "--executor lsf-jobstep --jobs 1"
 
-    def process_time(self, time):
-        if type(time) in [int, float]:
-            return time
-        elif type(time) is str:
-            try:
-                return math.ceil(snakemake.resources.parse_timespan(time) / 60)
-            except InvalidTimespan:
-                if re.match(r"^\d+:\d\d:\d\d$", time):
-                    h, m, s = map(float, time.split(":"))
-                    return math.ceil((h * 60) + m + (s / 60))
-                elif re.match(r"^\d+:\d\d$", time):
-                    m, s = map(float, time.split(":"))
-                    self.logger.warning(
-                        "Assuming min:sec for compatibility with other "
-                        "executors, despite LSF using hours and minutes."
-                    )
-                    return math.ceil(m + (s / 60))
-                else:
-                    self.logger.warning(
-                        "time is a string but not parsable. Passing as-is."
-                    )
-                    return shlex.quote(time)
-        else:
-            raise ValueError(f"Invalid time format: {time}")
-
     def run_job(self, job: JobExecutorInterface):
         # Implement here how to run a job.
         # You can access the job's resources, etc.
@@ -511,6 +486,53 @@ class Executor(RemoteExecutor):
                     )
                     self._fallback_project_arg = ""  # no project specific args for bsub
             return self._fallback_project_arg
+
+
+    def process_time(self, time) -> str | int:
+        # Return rounded up if numeric
+        if isinstance(time, (int, float)):
+            return math.ceil(time)
+
+        # otherwise cooerce to string and strip
+        time_str = str(time).strip()
+
+        # Try to parse as plain number first
+        try:
+            return math.ceil(float(time_str))
+        except ValueError:
+            pass
+
+        # Try to parse as Snakemake time
+        try:
+            return math.ceil(snakemake.resources.parse_timespan(time_str) / 60)
+        except InvalidTimespan:
+            pass
+
+        # Try to parse as Slurm time format or colon-separated format
+        slurm = re.compile(
+            r'^(\d+)-(\d+)(?::(\d{2}))?(?::(\d{2}(?:\.\d+)?))?$'
+        )
+        colon = re.compile(
+            r'^(?:(\d+):)?(\d+):(\d{2}(?:\.\d+)?)$'
+        )
+
+        if match := slurm.match(time_str):
+            d, h, m, s = (float(x or 0) for x in match.groups())
+        elif match := colon.match(time_str):
+            h, m, s = (float(x or 0) for x in match.groups())
+            d = 0
+            if re.match(r"^\d+:\d\d$", time_str):
+                self.logger.warning(
+                    "Assuming min:sec for compatibility with other "
+                    "executors, despite LSF using hours and minutes."
+                )
+        else:
+            self.logger.warning(
+                "time is not parsable. Passing as trimmed string."
+            )
+            return shlex.quote(time_str)
+
+        return math.ceil(d * 1440 + h * 60 + m + s / 60)
 
     def get_queue_arg(self, job: JobExecutorInterface):
         """
