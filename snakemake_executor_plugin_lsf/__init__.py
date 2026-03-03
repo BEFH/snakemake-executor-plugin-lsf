@@ -487,7 +487,6 @@ class Executor(RemoteExecutor):
                     self._fallback_project_arg = ""  # no project specific args for bsub
             return self._fallback_project_arg
 
-
     def process_time(self, time) -> str | int:
         """
         Convert a time specification to minutes (integer).
@@ -532,12 +531,8 @@ class Executor(RemoteExecutor):
             pass
 
         # Try to parse as Slurm time format or colon-separated format
-        slurm = re.compile(
-            r'^(\d+)-(\d+)(?::(\d{2}))?(?::(\d{2}(?:\.\d+)?))?$'
-        )
-        colon = re.compile(
-            r'^(?:(\d+):)?(\d+):(\d{2}(?:\.\d+)?)$'
-        )
+        slurm = re.compile(r"^(\d+)-(\d+)(?::(\d{2}))?(?::(\d{2}(?:\.\d+)?))?$")
+        colon = re.compile(r"^(?:(\d+):)?(\d+):(\d{2}(?:\.\d+)?)$")
 
         if match := slurm.match(time_str):
             d, h, m, s = (float(x or 0) for x in match.groups())
@@ -550,9 +545,7 @@ class Executor(RemoteExecutor):
                     "executors, despite LSF using hours and minutes."
                 )
         else:
-            self.logger.warning(
-                "time is not parsable. Passing as trimmed string."
-            )
+            self.logger.warning("time is not parsable. Passing as trimmed string.")
             return shlex.quote(time_str)
 
         return math.ceil(d * 1440 + h * 60 + m + s / 60)
