@@ -16,15 +16,14 @@ from typing import List, Generator
 from collections import Counter
 import uuid
 import math
-import shlex
 from snakemake_interface_executor_plugins.executors.base import SubmittedJobInfo
 from snakemake_interface_executor_plugins.executors.remote import RemoteExecutor
 from snakemake_interface_executor_plugins.settings import CommonSettings
-from snakemake_interface_executor_plugins.jobs import (
-    JobExecutorInterface,
-)
+from snakemake_interface_executor_plugins.jobs import JobExecutorInterface
 from snakemake_interface_common.exceptions import WorkflowError
-
+import snakemake.resources
+from humanfriendly import InvalidTimespan
+import shlex
 
 # Required:
 # Specify common settings shared by various executors.
@@ -122,9 +121,11 @@ class Executor(RemoteExecutor):
         call += self.get_queue_arg(job)
 
         if job.resources.get("runtime"):
-            call += f" -W {job.resources.runtime}"
+            call += f" -W {self.process_time(job.resources.runtime)}"
+        elif job.resources.get("time"):
+            call += f" -W {self.process_time(job.resources.time)}"
         elif job.resources.get("walltime"):
-            call += f" -W {job.resources.walltime}"
+            call += f" -W {self.process_time(job.resources.walltime)}"
         elif job.resources.get("time_min"):
             if not type(job.resources.time_min) in [int, float]:
                 self.logger.error("time_min must be a number")
@@ -245,7 +246,7 @@ class Executor(RemoteExecutor):
 
         for i in range(status_attempts):
             async with self.status_rate_limiter:
-                (status_of_jobs, job_query_duration) = await self.job_stati_bjobs()
+                status_of_jobs, job_query_duration = await self.job_stati_bjobs()
                 if status_of_jobs is None and job_query_duration is None:
                     self.logger.debug(
                         f"Could not check status of job {self.run_uuid}. "
@@ -485,6 +486,69 @@ class Executor(RemoteExecutor):
                     )
                     self._fallback_project_arg = ""  # no project specific args for bsub
             return self._fallback_project_arg
+
+    def process_time(self, time) -> str | int:
+        """
+        Convert a time specification to minutes (integer).
+
+        Supports:
+        - Numeric values (assumed to be in minutes): 120, 120.5
+        - Snakemake-style time strings: "6d", "12h", "30m", "90s", "2d12h30m"
+        - SLURM time formats:
+            - "minutes" (e.g., "60")
+            - "minutes:seconds" (interpreted as hours:minutes, e.g., "60:30")
+            - "hours:minutes:seconds" (e.g., "1:30:45")
+            - "days-hours" (e.g., "2-12")
+            - "days-hours:minutes" (e.g., "2-12:30")
+            - "days-hours:minutes:seconds" (e.g., "2-12:30:45")
+
+        Args:
+            time: Time specification as string, int, or float
+
+        Returns:
+            Time in minutes as integer (fractional minutes are rounded)
+            Initial string if it cannot be parsed as a time specification
+
+        """
+
+        # Return rounded up if numeric
+        if isinstance(time, (int, float)):
+            return math.ceil(time)
+
+        # otherwise cooerce to string and strip
+        time_str = str(time).strip()
+
+        # Try to parse as plain number first
+        try:
+            return math.ceil(float(time_str))
+        except ValueError:
+            pass
+
+        # Try to parse as Snakemake time
+        try:
+            return math.ceil(snakemake.resources.parse_timespan(time_str) / 60)
+        except InvalidTimespan:
+            pass
+
+        # Try to parse as Slurm time format or colon-separated format
+        slurm = re.compile(r"^(\d+)-(\d+)(?::(\d{2}))?(?::(\d{2}(?:\.\d+)?))?$")
+        colon = re.compile(r"^(?:(\d+):)?(\d+):(\d{2}(?:\.\d+)?)$")
+
+        if match := slurm.match(time_str):
+            d, h, m, s = (float(x or 0) for x in match.groups())
+        elif match := colon.match(time_str):
+            h, m, s = (float(x or 0) for x in match.groups())
+            d = 0
+            if re.match(r"^\d+:\d\d$", time_str):
+                self.logger.warning(
+                    "Assuming min:sec for compatibility with other "
+                    "executors, despite LSF using hours and minutes."
+                )
+        else:
+            self.logger.warning("time is not parsable. Passing as trimmed string.")
+            return shlex.quote(time_str)
+
+        return math.ceil(d * 1440 + h * 60 + m + s / 60)
 
     def get_queue_arg(self, job: JobExecutorInterface):
         """
