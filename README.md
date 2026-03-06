@@ -76,7 +76,7 @@ rule calc_pi:
   threads: 40
   resources:
       tasks=10,
-      mpi='mpirun,
+      mpi='mpirun',
   shell:
       "{resources.mpi} -np {resources.tasks} calc-pi-mpi > {output} 2> {log}"
 ```
