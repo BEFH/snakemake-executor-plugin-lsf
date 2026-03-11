@@ -209,7 +209,8 @@ class Executor(RemoteExecutor):
                 status_of_jobs, job_query_duration = await self.job_stati_bjobs()
                 self.logger.debug(
                     f"Checking job statuses, attempt {i}: "
-                    f"status_of_jobs={status_of_jobs}, query_duration={job_query_duration}"
+                    f"status_of_jobs={status_of_jobs}, "
+                    f"query_duration={job_query_duration}"
                 )
                 if status_of_jobs is None or job_query_duration is None:
                     self.logger.debug(
