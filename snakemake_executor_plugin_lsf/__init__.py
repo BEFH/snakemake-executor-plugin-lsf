@@ -207,7 +207,12 @@ class Executor(RemoteExecutor):
         for i in range(status_attempts):
             async with self.status_rate_limiter:
                 status_of_jobs, job_query_duration = await self.job_stati_bjobs()
-                if status_of_jobs is None and job_query_duration is None:
+                self.logger.debug(
+                    f"Checking job statuses, attempt {i}: "
+                    f"status_of_jobs={status_of_jobs}, "
+                    f"query_duration={job_query_duration}"
+                )
+                if status_of_jobs is None or job_query_duration is None:
                     self.logger.debug(
                         f"Could not check status of job {self.run_uuid}. "
                         "See error above."
