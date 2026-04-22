@@ -465,7 +465,7 @@ class Executor(RemoteExecutor):
             mem_ = None
         if self.lsf_config["LSF_MEMFMT"] == "perjob":
             mem_ *= cpus_total
-        return mem_
+        return int(mem_)
 
     def get_mem_limit(self, job: JobExecutorInterface):
         """
@@ -477,9 +477,9 @@ class Executor(RemoteExecutor):
         mem_unit = self.lsf_config.get("LSF_UNIT_FOR_LIMITS", "MB")
         conv_fct = conv_fcts[mem_unit[0]]
         if job.resources.get("mem_mb_per_cpu"):
-            return job.resources.mem_mb_per_cpu * conv_fct * self.get_cpus(job)
+            return int(job.resources.mem_mb_per_cpu * conv_fct * self.get_cpus(job))
         elif job.resources.get("mem_mb"):
-            return job.resources.mem_mb * conv_fct
+            return int(job.resources.mem_mb * conv_fct)
         return None
 
     def get_span(self, job: JobExecutorInterface):
