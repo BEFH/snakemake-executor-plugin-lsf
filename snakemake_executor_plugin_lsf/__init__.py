@@ -12,18 +12,20 @@ import os
 import re
 import subprocess
 import time
-from typing import List, AsyncGenerator
-from collections import Counter
 import uuid
 import math
+import shlex
+import packaging
+from typing import List, AsyncGenerator
+from collections import Counter
+from humanfriendly import InvalidTimespan, parse_timespan
+
+import snakemake.resources
 from snakemake_interface_executor_plugins.executors.base import SubmittedJobInfo
 from snakemake_interface_executor_plugins.executors.remote import RemoteExecutor
 from snakemake_interface_executor_plugins.settings import CommonSettings
 from snakemake_interface_executor_plugins.jobs import JobExecutorInterface
 from snakemake_interface_common.exceptions import WorkflowError
-import snakemake.resources
-from humanfriendly import InvalidTimespan, parse_timespan
-import shlex
 
 # Required:
 # Specify common settings shared by various executors.
@@ -557,6 +559,7 @@ class Executor(RemoteExecutor):
         if smv >= minver:
             try:
                 from snakemake.resources import Resource
+
                 return Resource.parse_human_friendly("runtime", time_str)
             except WorkflowError:
                 pass
