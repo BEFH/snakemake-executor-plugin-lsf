@@ -22,7 +22,7 @@ from snakemake_interface_executor_plugins.settings import CommonSettings
 from snakemake_interface_executor_plugins.jobs import JobExecutorInterface
 from snakemake_interface_common.exceptions import WorkflowError
 import snakemake.resources
-from humanfriendly import InvalidTimespan
+from humanfriendly import InvalidTimespan, parse_timespan
 import shlex
 
 # Required:
@@ -551,9 +551,21 @@ class Executor(RemoteExecutor):
         except ValueError:
             pass
 
-        # Try to parse as Snakemake time
+        # Try to parse as snakemake 9.16.3+ time
+        smv = packaging.version.parse(snakemake.__version__)
+        minver = packaging.version.parse("9.16.3")
+        if smv >= minver:
+            try:
+                from snakemake.resources import Resource
+                return Resource.parse_human_friendly("runtime", time_str)
+            except WorkflowError:
+                pass
+            except ImportError:
+                pass
+
+        # Try to parse as humanfriendly time
         try:
-            return math.ceil(snakemake.resources.parse_timespan(time_str) / 60)
+            return math.ceil(parse_timespan(time_str) / 60)
         except InvalidTimespan:
             pass
 
