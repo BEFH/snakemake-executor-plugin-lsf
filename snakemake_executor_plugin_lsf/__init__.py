@@ -112,7 +112,8 @@ class Executor(RemoteExecutor):
             if exc.errno == 36:
                 wildcards_hash = hashlib.md5(wildcard_str.encode('utf8')).hexdigest()
                 lsf_logfile = os.path.abspath(
-                    f".snakemake/lsf_logs/{log_folder}/{wildcards_hash}/{self.run_uuid}.log"
+                    f".snakemake/lsf_logs/{log_folder}/"
+                    f"{wildcards_hash}/{self.run_uuid}.log"
                 )
                 os.makedirs(os.path.dirname(lsf_logfile), exist_ok=True)
             else:
