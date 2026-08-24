@@ -110,7 +110,7 @@ class Executor(RemoteExecutor):
             # if the OS complains about file paths being too long, we shorten
             # them by compressing the wildcard_str into its md5 hash value
             if exc.errno == 36:
-                wildcards_hash = hashlib.md5(wildcard_str.encode('utf8')).hexdigest()
+                wildcards_hash = hashlib.md5(wildcard_str.encode("utf8")).hexdigest()
                 lsf_logfile = os.path.abspath(
                     f".snakemake/lsf_logs/{log_folder}/"
                     f"{wildcards_hash}/{self.run_uuid}.log"
